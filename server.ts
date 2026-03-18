@@ -50,7 +50,13 @@ async function startServer() {
     if (!fs.existsSync(distPath)) {
       console.error("ERROR: dist directory not found! Did you run 'npm run build'?");
     }
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".js")) {
+          res.setHeader("Content-Type", "application/javascript");
+        }
+      }
+    }));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
