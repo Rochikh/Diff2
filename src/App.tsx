@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import React, { useState } from 'react';
 import { 
   Sparkles, 
@@ -111,9 +112,10 @@ export default function App() {
       return;
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = (import.meta.env?.VITE_GEMINI_API_KEY as string) || (process.env?.GEMINI_API_KEY as string);
     if (!apiKey) {
       setError('Clé API Gemini manquante. Veuillez configurer votre environnement.');
+      console.error('API Key is missing. Check your environment variables.');
       return;
     }
 

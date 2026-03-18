@@ -12,12 +12,19 @@ const PORT = 3000;
 
 app.use(express.json());
 
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
 app.get("/api/health", (req, res) => {
+  const distPath = path.resolve(__dirname, "dist");
   res.json({ 
     status: "ok", 
-    env: process.env.NODE_ENV,
+    env: process.env.NODE_ENV || "development",
     time: new Date().toISOString(),
-    distExists: fs.existsSync(path.resolve(__dirname, "dist"))
+    distExists: fs.existsSync(distPath),
+    distContents: fs.existsSync(distPath) ? fs.readdirSync(distPath) : []
   });
 });
 
@@ -27,7 +34,11 @@ app.all("/api/*", (req, res) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  const mode = process.env.NODE_ENV || "development";
+  console.log(`Starting server in ${mode} mode`);
+
+  if (mode !== "production") {
+    console.log("Initializing Vite middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -35,6 +46,10 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, "dist");
+    console.log(`Serving static files from: ${distPath}`);
+    if (!fs.existsSync(distPath)) {
+      console.error("ERROR: dist directory not found! Did you run 'npm run build'?");
+    }
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
