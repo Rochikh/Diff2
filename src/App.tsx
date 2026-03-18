@@ -112,7 +112,7 @@ export default function App() {
       return;
     }
 
-    const apiKey = (import.meta.env?.VITE_GEMINI_API_KEY as string) || (process.env?.GEMINI_API_KEY as string);
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
     if (!apiKey) {
       setError('Clé API Gemini manquante. Veuillez configurer votre environnement.');
       console.error('API Key is missing. Check your environment variables.');
