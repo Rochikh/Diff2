@@ -17,7 +17,6 @@ import {
   Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI, Type } from "@google/genai";
 
 interface ActivityVariant {
   title: string;
@@ -112,17 +111,9 @@ export default function App() {
       return;
     }
 
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
-    if (!apiKey) {
-      setError('Clé API Gemini manquante. Veuillez configurer votre environnement.');
-      console.error('API Key is missing. Check your environment variables.');
-      return;
-    }
-
     setLoading(true);
     setError(null);
     try {
-      const ai = new GoogleGenAI({ apiKey });
       const prompt = `En tant qu'expert en pédagogie, génère 3 variantes différenciées d'une activité d'apprentissage basées sur les paramètres suivants :
       - Thème : ${formData.theme}
       - Objectif pédagogique : ${formData.objective}
@@ -138,71 +129,50 @@ export default function App() {
       - Version standard : équilibrée, utilisable en conditions ordinaires.
       - Version défi : plus ouverte, exigeante, ou demandant un transfert de compétences.
       - Évite le jargon inutile et les clichés éducatifs vagues.
-      - Les sorties doivent être concrètes et directement utilisables.
+      - Les sorties doivent être concrètes et directement utilisables par un enseignant ou formateur.
       - Ne mentionne pas la taxonomie de Bloom.
+      - IMPORTANTE: Réponds UNIQUEMENT avec un objet JSON strict. Pas de markdown autour, pas de "Voici le résultat". Juste le JSON.
 
-      Chaque variante doit inclure :
-      - Titre
-      - Consigne
-      - Déroulement en étapes
-      - Niveau d'accompagnement attendu
-      - Critères de réussite
-      - Variante possible pour aller plus loin`;
+      Directives spécifiques pour le contenu :
+      - Déroulement en étapes (steps) : Sois très descriptif. Inclus des exemples concrets d'actions, de consignes intermédiaires ou de questions à poser aux apprenants pour guider le formateur pas à pas.
+      - Critères de réussite (successCriteria) : Utilise un langage clair, mesurable et actionnable. Donne des exemples précis de ce qui est attendu (ex: "L'apprenant a formulé 2 arguments basés sur le texte" plutôt que "L'apprenant a compris le texte").
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              guided: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  instruction: { type: Type.STRING },
-                  steps: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  supportLevel: { type: Type.STRING },
-                  successCriteria: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  extension: { type: Type.STRING },
-                },
-                required: ["title", "instruction", "steps", "supportLevel", "successCriteria", "extension"],
-              },
-              standard: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  instruction: { type: Type.STRING },
-                  steps: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  supportLevel: { type: Type.STRING },
-                  successCriteria: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  extension: { type: Type.STRING },
-                },
-                required: ["title", "instruction", "steps", "supportLevel", "successCriteria", "extension"],
-              },
-              challenge: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  instruction: { type: Type.STRING },
-                  steps: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  supportLevel: { type: Type.STRING },
-                  successCriteria: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  extension: { type: Type.STRING },
-                },
-                required: ["title", "instruction", "steps", "supportLevel", "successCriteria", "extension"],
-              },
-            },
-            required: ["guided", "standard", "challenge"],
-          },
-        },
+      La réponse DOIT ABSOLUMENT être un objet JSON valide avec cette structure EXACTE :
+      {
+        "guided": { "title": "...", "instruction": "...", "steps": ["..."], "supportLevel": "...", "successCriteria": ["..."], "extension": "..." },
+        "standard": { "title": "...", "instruction": "...", "steps": ["..."], "supportLevel": "...", "successCriteria": ["..."], "extension": "..." },
+        "challenge": { "title": "...", "instruction": "...", "steps": ["..."], "supportLevel": "...", "successCriteria": ["..."], "extension": "..." }
+      }`;
+
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
       });
 
-      const text = response.text;
-      if (!text) throw new Error("Réponse vide du modèle.");
+      if (!response.ok) {
+        const errDetails = await response.json().catch(() => ({}));
+        throw new Error(errDetails.error || 'Erreur lors de la communication avec le serveur.');
+      }
+
+      const responseData = await response.json();
       
-      const data = JSON.parse(text);
+      let data;
+      try {
+        // Enforce cleanup if the model included markdown blocks like ```json
+        let cleanContent = responseData.content.trim();
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\n?/, '').replace(/```$/, '');
+        }
+        data = JSON.parse(cleanContent);
+      } catch (parseError) {
+        throw new Error("La réponse de l'IA n'est pas un JSON valide.");
+      }
+
+      if (!data.guided || !data.standard || !data.challenge) {
+        throw new Error("La réponse de l'IA est incomplète ou mal formatée.");
+      }
+
       setResult(data);
     } catch (err: any) {
       setError(err.message || 'Une erreur est survenue. Veuillez réessayer.');

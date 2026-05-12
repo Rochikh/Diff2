@@ -28,6 +28,56 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+app.post("/api/generate", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    
+    if (!prompt) {
+      return res.status(400).json({ error: "Missing prompt" });
+    }
+
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+    if (!OPENROUTER_API_KEY) {
+      return res.status(500).json({ error: "OPENROUTER_API_KEY is not configured on the server." });
+    }
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "deepseek/deepseek-chat", // Or another valid OpenRouter model String
+        messages: [
+          { role: "user", content: prompt }
+        ],
+        // Note: For some models response_format helps, but deepseek usually handles JSON from instructions 
+        response_format: { type: "json_object" }
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("OpenRouter API Error:", response.status, errText);
+      return res.status(response.status).json({ error: `OpenRouter API failed: ${response.statusText}` });
+    }
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    
+    if (!content) {
+      return res.status(500).json({ error: "No content returned from OpenRouter" });
+    }
+
+    res.json({ content });
+
+  } catch (error) {
+    console.error("Error generating content:", error);
+    res.status(500).json({ error: "Internal server error during content generation" });
+  }
+});
+
 // Catch-all for undefined API routes to return JSON instead of HTML
 app.all("/api/*", (req, res) => {
   res.status(404).json({ error: `Route ${req.method} ${req.url} non trouvée` });
