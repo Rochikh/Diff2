@@ -151,8 +151,14 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errDetails = await response.json().catch(() => ({}));
-        throw new Error(errDetails.error || 'Erreur lors de la communication avec le serveur.');
+        let errorMsg = `Erreur lors de la communication avec le serveur (${response.status} ${response.statusText}).`;
+        try {
+          const errDetails = await response.json();
+          if (errDetails.error) errorMsg = errDetails.error;
+        } catch(e) {
+          // If response is HTML (like Vercel timeout or 404), keeping the status info
+        }
+        throw new Error(errorMsg);
       }
 
       const responseData = await response.json();
