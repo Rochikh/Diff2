@@ -35,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-v4-flash",
+        model: "deepseek/deepseek-v4-pro",
         messages: [
           {
             role: "system",
