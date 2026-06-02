@@ -168,10 +168,12 @@ export default function App() {
       
       let data;
       try {
-        // Enforce cleanup if the model included markdown blocks like ```json
         let cleanContent = responseData.content.trim();
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\n?/, '').replace(/```$/, '');
+        cleanContent = cleanContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+        const firstBrace = cleanContent.indexOf('{');
+        const lastBrace = cleanContent.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          cleanContent = cleanContent.slice(firstBrace, lastBrace + 1);
         }
         data = JSON.parse(cleanContent);
       } catch (parseError) {

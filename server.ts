@@ -48,11 +48,15 @@ app.post("/api/generate", async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-chat", // Or another valid OpenRouter model String
+        model: "deepseek/deepseek-v4-flash",
         messages: [
+          {
+            role: "system",
+            content: "Tu es un assistant pédagogique expert. Tu réponds EXCLUSIVEMENT par un objet JSON valide, sans texte avant ni après, sans bloc markdown, sans commentaire. Si la consigne demande une structure précise, respecte-la à la lettre."
+          },
           { role: "user", content: prompt }
         ],
-        // Note: For some models response_format helps, but deepseek usually handles JSON from instructions 
+        temperature: 0.4,
         response_format: { type: "json_object" }
       })
     });
@@ -60,7 +64,10 @@ app.post("/api/generate", async (req, res) => {
     if (!response.ok) {
       const errText = await response.text();
       console.error("OpenRouter API Error:", response.status, errText);
-      return res.status(response.status).json({ error: `OpenRouter API failed: ${response.statusText}` });
+      const detail = errText.slice(0, 500);
+      return res.status(response.status).json({
+        error: `OpenRouter API failed (${response.status} ${response.statusText}): ${detail}`
+      });
     }
 
     const data = await response.json();
