@@ -35,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-v4-pro",
+        model: "deepseek/deepseek-v4-flash",
         messages: [
           {
             role: "system",
@@ -51,7 +51,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!response.ok) {
       const errText = await response.text();
       console.error("OpenRouter API Error:", response.status, errText);
-      return res.status(response.status).json({ error: `OpenRouter API failed: ${response.statusText}` });
+      const detail = errText.slice(0, 500);
+      return res.status(response.status).json({
+        error: `OpenRouter API failed (${response.status} ${response.statusText}): ${detail}`
+      });
     }
 
     const data = await response.json();
