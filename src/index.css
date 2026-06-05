@@ -10,3 +10,32 @@
     @apply antialiased;
   }
 }
+
+@media print {
+  @page {
+    margin: 1.5cm;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #results-print-area,
+  #results-print-area * {
+    visibility: visible;
+  }
+  #results-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  #results-print-area .grid {
+    display: block !important;
+  }
+  #results-print-area .grid > * {
+    page-break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

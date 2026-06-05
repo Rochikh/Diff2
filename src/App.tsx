@@ -1,11 +1,11 @@
 /// <reference types="vite/client" />
 import React, { useState } from 'react';
-import { 
-  Sparkles, 
-  RefreshCcw, 
-  Lightbulb, 
-  ChevronRight, 
-  Loader2, 
+import {
+  Sparkles,
+  RefreshCcw,
+  Lightbulb,
+  ChevronRight,
+  Loader2,
   AlertCircle,
   BookOpen,
   Users,
@@ -14,7 +14,9 @@ import {
   Layout,
   Target,
   Check,
-  Info
+  Info,
+  Printer,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -73,6 +75,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -88,6 +91,41 @@ export default function App() {
       diffType: 'autonomie',
       format: 'individuel'
     });
+  };
+
+  const buildMarkdown = (data: GenerationResult): string => {
+    const variantToMd = (label: string, v: ActivityVariant) => {
+      return `## ${label} — ${v.title}\n\n` +
+        `**Consigne** : ${v.instruction}\n\n` +
+        `**Déroulement**\n${v.steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\n` +
+        `**Accompagnement attendu** : ${v.supportLevel}\n\n` +
+        `**Critères de réussite**\n${v.successCriteria.map(c => `- ${c}`).join('\n')}\n\n` +
+        `**Pour aller plus loin** : ${v.extension}\n`;
+    };
+    const header = `# Variantes pédagogiques différenciées\n\n` +
+      `- **Thème** : ${formData.theme}\n` +
+      `- **Objectif** : ${formData.objective}\n` +
+      `- **Public** : ${formData.target || '—'}\n` +
+      `- **Durée** : ${formData.duration || '—'}\n` +
+      `- **Type de différenciation** : ${formData.diffType}\n` +
+      `- **Format** : ${formData.format}\n\n`;
+    return header +
+      variantToMd('Version très guidée', data.guided) + '\n' +
+      variantToMd('Version standard', data.standard) + '\n' +
+      variantToMd('Version défi', data.challenge);
+  };
+
+  const handlePrint = () => window.print();
+
+  const handleCopy = async () => {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(buildMarkdown(result));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Impossible de copier dans le presse-papier.");
+    }
   };
 
   const resetForm = () => {
@@ -407,14 +445,34 @@ export default function App() {
         {/* Results Section */}
         <AnimatePresence>
           {result && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="space-y-8"
+              id="results-print-area"
             >
               <div className="text-center mb-8">
                 <h3 className="text-2xl font-bold text-slate-900">Vos variantes pédagogiques</h3>
                 <p className="text-slate-500">Trois approches adaptées pour un même objectif</p>
+                <div className="no-print mt-5 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={handlePrint}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors shadow-sm"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Télécharger en PDF
+                  </button>
+                  <button
+                    onClick={handleCopy}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors"
+                  >
+                    {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    {copied ? 'Copié' : 'Copier (Markdown)'}
+                  </button>
+                </div>
+                <p className="no-print text-xs text-slate-400 mt-2">
+                  Astuce : dans la boîte d'impression, choisis « Enregistrer au format PDF ».
+                </p>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
