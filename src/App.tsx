@@ -16,9 +16,21 @@ import {
   Check,
   Info,
   Printer,
-  Copy
+  Copy,
+  FileUp,
+  FileText,
+  X,
+  Loader
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+// Plafond de caractères extraits envoyés à l'IA (~20-30 pages) pour éviter
+// d'exploser les coûts et le contexte sur de très gros documents.
+const MAX_DOC_CHARS = 50000;
 
 interface ActivityVariant {
   title: string;
@@ -77,6 +89,13 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Document de référence optionnel (PDF) chargé par le formateur.
+  const [docName, setDocName] = useState<string | null>(null);
+  const [docText, setDocText] = useState<string>('');
+  const [docPages, setDocPages] = useState<number>(0);
+  const [docTruncated, setDocTruncated] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -128,6 +147,64 @@ export default function App() {
     }
   };
 
+  const clearDocument = () => {
+    setDocName(null);
+    setDocText('');
+    setDocPages(0);
+    setDocTruncated(false);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Réinitialise l'input pour permettre de recharger le même fichier.
+    e.target.value = '';
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      setError('Format non supporté pour le moment. Merci de charger un fichier PDF.');
+      return;
+    }
+
+    setError(null);
+    setExtracting(true);
+    clearDocument();
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+      let fullText = '';
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => ('str' in item ? item.str : ''))
+          .join(' ');
+        fullText += pageText + '\n\n';
+        if (fullText.length > MAX_DOC_CHARS) break;
+      }
+
+      fullText = fullText.trim();
+
+      if (!fullText) {
+        setError("Aucun texte extractible trouvé. Le PDF est peut-être scanné (image). L'OCR n'est pas encore géré.");
+        setExtracting(false);
+        return;
+      }
+
+      const truncated = fullText.length > MAX_DOC_CHARS;
+      setDocText(truncated ? fullText.slice(0, MAX_DOC_CHARS) : fullText);
+      setDocTruncated(truncated);
+      setDocName(file.name);
+      setDocPages(pdf.numPages);
+    } catch (err) {
+      console.error(err);
+      setError("Impossible de lire ce PDF. Vérifiez qu'il n'est pas protégé ou corrompu.");
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       theme: '',
@@ -139,6 +216,7 @@ export default function App() {
     });
     setResult(null);
     setError(null);
+    clearDocument();
   };
 
   const generateActivities = async () => {
@@ -152,6 +230,14 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
+      const docSection = docText
+        ? `\n\n      Document de référence fourni par le formateur (à utiliser comme base de contenu pour les activités) :
+      """
+      ${docText}
+      """
+      Appuie-toi prioritairement sur le contenu de ce document pour concevoir les activités (exemples, notions, vocabulaire), tout en respectant l'objectif pédagogique et le type de différenciation demandés.\n`
+        : '';
+
       const prompt = `En tant qu'expert en pédagogie, génère 3 variantes différenciées d'une activité d'apprentissage basées sur les paramètres suivants :
       - Thème : ${formData.theme}
       - Objectif pédagogique : ${formData.objective}
@@ -159,7 +245,7 @@ export default function App() {
       - Durée estimée : ${formData.duration}
       - Type de différenciation : ${formData.diffType}
       - Format souhaité : ${formData.format}
-
+${docSection}
       Règles pédagogiques :
       - Garde le même objectif pédagogique pour les 3 versions.
       - Varie uniquement le niveau d'étayage, d'autonomie ou de complexité selon le type de différenciation choisi (${formData.diffType}).
@@ -403,6 +489,75 @@ export default function App() {
                   </select>
                 </div>
               </div>
+            </div>
+
+            {/* Document de référence (optionnel) */}
+            <div className="mt-8 pt-6 border-t border-slate-100">
+              <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-slate-400" />
+                Document de référence (optionnel)
+              </label>
+              <p className="text-xs text-slate-500 mb-3">
+                Chargez un PDF (cours, support, fiche) : l'IA s'appuiera sur son contenu pour différencier les activités.
+              </p>
+
+              {!docName ? (
+                <label className={`flex flex-col items-center justify-center gap-2 w-full px-4 py-6 rounded-xl border-2 border-dashed transition-all cursor-pointer ${
+                  extracting
+                    ? 'border-indigo-200 bg-indigo-50/40 cursor-wait'
+                    : 'border-slate-200 bg-slate-50/50 hover:border-indigo-300 hover:bg-indigo-50/30'
+                }`}>
+                  {extracting ? (
+                    <>
+                      <Loader className="w-6 h-6 text-indigo-500 animate-spin" />
+                      <span className="text-sm font-medium text-slate-600">Extraction du texte en cours…</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileUp className="w-6 h-6 text-slate-400" />
+                      <span className="text-sm font-medium text-slate-600">Cliquez pour choisir un PDF</span>
+                      <span className="text-xs text-slate-400">Le fichier reste dans votre navigateur, il n'est pas stocké.</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={handleFileChange}
+                    disabled={extracting}
+                    className="hidden"
+                  />
+                </label>
+              ) : (
+                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="bg-emerald-100 p-2 rounded-lg shrink-0">
+                      <FileText className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{docName}</p>
+                      <p className="text-xs text-slate-500">
+                        {docPages} page{docPages > 1 ? 's' : ''} · {docText.length.toLocaleString('fr-FR')} caractères extraits
+                        {docTruncated && ' (tronqué)'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearDocument}
+                    className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    title="Retirer le document"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {docTruncated && (
+                <p className="mt-2 text-xs text-amber-600 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  Document volumineux : seuls les {MAX_DOC_CHARS.toLocaleString('fr-FR')} premiers caractères seront utilisés.
+                </p>
+              )}
             </div>
 
             {/* Actions */}
