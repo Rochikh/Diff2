@@ -6,12 +6,6 @@ import {
   Lightbulb,
   Loader2,
   AlertCircle,
-  BookOpen,
-  Users,
-  Clock,
-  Layers,
-  Layout,
-  Target,
   Check,
   Printer,
   Copy,
@@ -104,10 +98,12 @@ const FORMATS = [
 const DIFF_TYPE_LABEL = (id: string) => DIFF_TYPES.find(t => t.id === id)?.label || id;
 const FORMAT_LABEL = (id: string) => FORMATS.find(f => f.id === id)?.label || id;
 
-const VARIANT_META: Record<VariantKey, { label: string; description: string; color: 'emerald' | 'indigo' | 'amber' }> = {
-  guided: { label: 'Version très guidée', description: 'Hautement étayée et rassurante', color: 'emerald' },
-  standard: { label: 'Version standard', description: 'Équilibrée et autonome', color: 'indigo' },
-  challenge: { label: 'Version défi', description: 'Exigeante et ouverte', color: 'amber' }
+type PenColor = 'vert' | 'bleu' | 'rouge';
+
+const VARIANT_META: Record<VariantKey, { label: string; short: string; description: string; color: PenColor }> = {
+  guided: { label: 'Version très guidée', short: 'Très guidée', description: 'Hautement étayée et rassurante', color: 'vert' },
+  standard: { label: 'Version standard', short: 'Standard', description: 'Équilibrée et autonome', color: 'bleu' },
+  challenge: { label: 'Version défi', short: 'Défi', description: 'Exigeante et ouverte', color: 'rouge' }
 };
 
 const LOADING_MESSAGES = [
@@ -129,6 +125,17 @@ function parseAIJson(raw: string): any {
   return JSON.parse(clean);
 }
 
+// Le modèle numérote parfois lui-même ses listes ("1. Ouvrez...") : on retire
+// cette numérotation, l'interface affiche déjà la sienne.
+function normalizeVariant(v: ActivityVariant): ActivityVariant {
+  const strip = (s: string) => s.replace(/^\s*(?:\d+[.)]\s*|[-•]\s*)/, '').trim();
+  return {
+    ...v,
+    steps: v.steps.map(strip),
+    successCriteria: v.successCriteria.map(strip)
+  };
+}
+
 function isValidVariant(v: any): v is ActivityVariant {
   return (
     v &&
@@ -138,6 +145,36 @@ function isValidVariant(v: any): v is ActivityVariant {
     typeof v.supportLevel === 'string' &&
     Array.isArray(v.successCriteria) &&
     typeof v.extension === 'string'
+  );
+}
+
+// Signature visuelle : une entrée, trois chemins.
+function Bifurcation({ mode = 'draw', className }: { mode?: 'draw' | 'pulse'; className?: string }) {
+  const anim = (n: 1 | 2 | 3) =>
+    mode === 'draw'
+      ? `path-draw${n > 1 ? ` path-draw-${n}` : ''}`
+      : `path-pulse${n > 1 ? ` path-pulse-${n}` : ''}`;
+  return (
+    <svg viewBox="0 0 340 120" fill="none" className={className} aria-hidden="true">
+      <circle cx="14" cy="60" r="5" className="fill-ink" />
+      <path d="M22 60 H64" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-ink" />
+      <path d="M64 60 C130 60 175 17 314 15" strokeWidth="2.5" strokeLinecap="round" className={`stroke-vert ${anim(1)}`} />
+      <path d="M64 60 H314" strokeWidth="2.5" strokeLinecap="round" className={`stroke-bleu ${anim(2)}`} />
+      <path d="M64 60 C130 60 175 103 314 105" strokeWidth="2.5" strokeLinecap="round" className={`stroke-rouge ${anim(3)}`} />
+      <circle cx="322" cy="15" r="4.5" className={`fill-vert ${mode === 'draw' ? 'dot-reveal' : ''}`} />
+      <circle cx="322" cy="60" r="4.5" className={`fill-bleu ${mode === 'draw' ? 'dot-reveal' : ''}`} />
+      <circle cx="322" cy="105" r="4.5" className={`fill-rouge ${mode === 'draw' ? 'dot-reveal' : ''}`} />
+    </svg>
+  );
+}
+
+function PenMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 26 10" className={className} aria-hidden="true">
+      <circle cx="4" cy="5" r="3.5" className="fill-vert" />
+      <circle cx="13" cy="5" r="3.5" className="fill-bleu" />
+      <circle cx="22" cy="5" r="3.5" className="fill-rouge" />
+    </svg>
   );
 }
 
@@ -174,7 +211,13 @@ export default function App() {
       if (saved) {
         const s = JSON.parse(saved);
         if (s.formData) setFormData({ ...EMPTY_FORM, ...s.formData });
-        if (s.result) setResult(s.result);
+        if (s.result && isValidVariant(s.result.guided) && isValidVariant(s.result.standard) && isValidVariant(s.result.challenge)) {
+          setResult({
+            guided: normalizeVariant(s.result.guided),
+            standard: normalizeVariant(s.result.standard),
+            challenge: normalizeVariant(s.result.challenge)
+          });
+        }
         if (s.genParams) setGenParams(s.genParams);
         if (s.doc) {
           setDocName(s.doc.name);
@@ -446,7 +489,11 @@ export default function App() {
         throw new Error("La réponse de l'IA est incomplète ou mal formatée. Réessayez.");
       }
 
-      setResult(data);
+      setResult({
+        guided: normalizeVariant(data.guided),
+        standard: normalizeVariant(data.standard),
+        challenge: normalizeVariant(data.challenge)
+      });
       setGenParams({ ...formData, docName });
       setActiveVariant('guided');
       scrollTo(resultsRef);
@@ -468,7 +515,7 @@ export default function App() {
       if (!isValidVariant(data)) {
         throw new Error("La réponse de l'IA est incomplète ou mal formatée. Réessayez.");
       }
-      setResult(prev => (prev ? { ...prev, [variant]: data } : prev));
+      setResult(prev => (prev ? { ...prev, [variant]: normalizeVariant(data) } : prev));
     } catch (err: any) {
       setError(err.message || 'Une erreur est survenue. Veuillez réessayer.');
       scrollTo(errorRef, 'center');
@@ -481,59 +528,77 @@ export default function App() {
   const loadingMessage = LOADING_MESSAGES[Math.min(Math.floor(elapsed / 6), LOADING_MESSAGES.length - 1)];
   const progressPct = Math.min(5 + (elapsed / 40) * 90, 95);
 
+  const inputClasses = (invalid?: boolean) =>
+    `w-full px-4 py-3 rounded-lg border bg-white text-[15px] placeholder:text-inkfaint transition-colors outline-none focus-visible:ring-2 focus-visible:ring-bleu/60 focus:border-bleu ${
+      invalid ? 'border-rouge ring-1 ring-rouge/30' : 'border-line hover:border-inkfaint'
+    }`;
+
+  const labelClasses = 'block font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-inksoft mb-2';
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#1E293B] font-sans selection:bg-indigo-100">
+    <div className="min-h-screen bg-paper text-ink font-sans selection:bg-bleu-soft">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-indigo-600 p-2 rounded-lg">
-              <Layers className="text-white w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">
+      <header className="bg-paper/90 backdrop-blur border-b border-line sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <PenMark className="w-7 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-display text-[17px] font-bold leading-tight truncate">
                 Assistant de différenciation pédagogique
-              </h1>
-              <p className="text-xs text-slate-500 font-medium">
-                Concevoir des parcours d'apprentissage inclusifs
+              </p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-inksoft">
+                Parcours d'apprentissage inclusifs
               </p>
             </div>
           </div>
           <button
             onClick={loadExample}
-            className="hidden sm:flex items-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors px-3 py-1.5 rounded-full bg-indigo-50"
+            className="hidden sm:inline-flex items-center gap-2 font-mono text-xs font-medium uppercase tracking-wider text-bleu hover:text-bleu-dark transition-colors px-3 py-2 rounded-lg border border-line hover:border-bleu/40 bg-white"
           >
-            <Lightbulb className="w-4 h-4" />
-            Charger un exemple
+            <Lightbulb className="w-3.5 h-3.5" />
+            Exemple
           </button>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        {/* Intro Section */}
-        <section className="mb-10 text-center max-w-2xl mx-auto">
-          <h2 className="text-3xl font-extrabold text-slate-900 mb-3">
-            Personnalisez vos activités en un clic
-          </h2>
-          <p className="text-slate-600 leading-relaxed">
-            Cet outil aide les formateurs à créer 3 versions différenciées d'une même activité à partir d'un objectif commun, sans collecter de données personnelles.
-          </p>
-          <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-100 rounded-xl text-amber-800 text-sm">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>Note : Cet outil génère des variantes pédagogiques à partir de paramètres génériques. Il ne traite aucune donnée personnelle et ne remplace pas le jugement du formateur.</span>
+      <main className="max-w-5xl mx-auto px-4 pt-14 pb-10">
+        {/* Hero */}
+        <section className="mb-14 grid grid-cols-1 md:grid-cols-[1fr_auto] items-center gap-8">
+          <div>
+            <p className="font-mono text-xs font-medium uppercase tracking-[0.22em] text-bleu mb-4">
+              Pour formateurs et enseignants
+            </p>
+            <h1 className="font-display text-4xl sm:text-5xl font-bold tracking-tight leading-[1.05] mb-5">
+              Une activité,<br />trois chemins.
+            </h1>
+            <p className="text-inksoft text-lg leading-relaxed max-w-xl">
+              Décrivez votre activité et son objectif : l'outil génère trois versions
+              différenciées, <span className="text-vert font-semibold">très guidée</span>,{' '}
+              <span className="text-bleu font-semibold">standard</span> et{' '}
+              <span className="text-rouge font-semibold">défi</span>, prêtes à ajuster.
+            </p>
+            <p className="mt-4 text-sm text-inkfaint">
+              Aucune donnée personnelle n'est traitée. L'outil ne remplace pas le jugement du formateur.
+            </p>
           </div>
+          <Bifurcation mode="draw" className="hidden md:block w-64 text-ink" />
         </section>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-12">
+        <div className="bg-white rounded-xl border border-line mb-12">
+          <div className="px-6 sm:px-8 py-4 border-b border-line flex items-center justify-between">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-ink">
+              Fiche de préparation
+            </p>
+            <PenMark className="w-6 opacity-60" />
+          </div>
           <div className="p-6 sm:p-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Left Column */}
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <div>
-                  <label htmlFor="theme" className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-slate-400" />
-                    Thème de l’activité <span className="text-red-500" aria-hidden="true">*</span>
+                  <label htmlFor="theme" className={labelClasses}>
+                    Thème de l’activité <span className="text-rouge" aria-hidden="true">*</span>
                   </label>
                   <input
                     id="theme"
@@ -546,19 +611,16 @@ export default function App() {
                     aria-required="true"
                     aria-invalid={fieldErrors.theme || undefined}
                     placeholder="Ex: La gestion du temps, Excel niveau 1..."
-                    className={`w-full px-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none bg-slate-50/50 ${
-                      fieldErrors.theme ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200'
-                    }`}
+                    className={inputClasses(fieldErrors.theme)}
                   />
                   {fieldErrors.theme && (
-                    <p className="mt-1 text-xs text-red-600">Ce champ est obligatoire.</p>
+                    <p className="mt-1.5 text-xs text-rouge">Ce champ est obligatoire.</p>
                   )}
                 </div>
 
                 <div>
-                  <label htmlFor="objective" className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-2">
-                    <Target className="w-4 h-4 text-slate-400" />
-                    Objectif pédagogique <span className="text-red-500" aria-hidden="true">*</span>
+                  <label htmlFor="objective" className={labelClasses}>
+                    Objectif pédagogique <span className="text-rouge" aria-hidden="true">*</span>
                   </label>
                   <textarea
                     id="objective"
@@ -570,19 +632,16 @@ export default function App() {
                     aria-required="true"
                     aria-invalid={fieldErrors.objective || undefined}
                     placeholder="Ex: Être capable de structurer un argumentaire de vente..."
-                    className={`w-full px-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none bg-slate-50/50 resize-none ${
-                      fieldErrors.objective ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200'
-                    }`}
+                    className={`${inputClasses(fieldErrors.objective)} resize-none`}
                   />
                   {fieldErrors.objective && (
-                    <p className="mt-1 text-xs text-red-600">Ce champ est obligatoire.</p>
+                    <p className="mt-1.5 text-xs text-rouge">Ce champ est obligatoire.</p>
                   )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="target" className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-2">
-                      <Users className="w-4 h-4 text-slate-400" />
+                    <label htmlFor="target" className={labelClasses}>
                       Public cible
                     </label>
                     <input
@@ -592,12 +651,11 @@ export default function App() {
                       value={formData.target}
                       onChange={handleInputChange}
                       placeholder="Ex: Demandeurs d'emploi"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none bg-slate-50/50"
+                      className={inputClasses()}
                     />
                   </div>
                   <div>
-                    <label htmlFor="duration" className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-slate-400" />
+                    <label htmlFor="duration" className={labelClasses}>
                       Durée
                     </label>
                     <input
@@ -607,19 +665,16 @@ export default function App() {
                       value={formData.duration}
                       onChange={handleInputChange}
                       placeholder="Ex: 30 min"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none bg-slate-50/50"
+                      className={inputClasses()}
                     />
                   </div>
                 </div>
               </div>
 
               {/* Right Column */}
-              <div className="space-y-5">
+              <div className="space-y-6">
                 <div>
-                  <span className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-2">
-                    <RefreshCcw className="w-4 h-4 text-slate-400" />
-                    Type de différenciation
-                  </span>
+                  <span className={labelClasses}>Type de différenciation</span>
                   <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label="Type de différenciation">
                     {DIFF_TYPES.map(type => {
                       const selected = formData.diffType === type.id;
@@ -630,24 +685,22 @@ export default function App() {
                           role="radio"
                           aria-checked={selected}
                           onClick={() => setFormData(prev => ({ ...prev, diffType: type.id }))}
-                          className={`w-full text-left px-4 py-3 rounded-xl border transition-all cursor-pointer ${
+                          className={`w-full text-left px-4 py-3 rounded-lg border transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-bleu/60 ${
                             selected
-                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 ring-1 ring-indigo-200'
-                            : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                            ? 'bg-bleu-soft border-bleu/50'
+                            : 'bg-white border-line hover:border-inkfaint'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-medium">{type.label}</span>
-                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all shrink-0 ${
-                              selected
-                              ? 'bg-indigo-600 border-indigo-600'
-                              : 'border-slate-300 bg-slate-50'
+                            <span className={`text-sm font-semibold ${selected ? 'text-bleu-dark' : 'text-ink'}`}>{type.label}</span>
+                            <div className={`w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center transition-colors shrink-0 ${
+                              selected ? 'border-bleu bg-bleu' : 'border-line bg-white'
                             }`}>
-                              {selected && <Check className="w-3 h-3 text-white" />}
+                              {selected && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3.5} />}
                             </div>
                           </div>
                           {selected && (
-                            <p className="mt-1.5 text-xs text-indigo-700/80 leading-relaxed font-normal">
+                            <p className="mt-1.5 text-[13px] text-inksoft leading-relaxed font-normal">
                               {type.description}
                             </p>
                           )}
@@ -658,8 +711,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label htmlFor="format" className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-2">
-                    <Layout className="w-4 h-4 text-slate-400" />
+                  <label htmlFor="format" className={labelClasses}>
                     Format souhaité
                   </label>
                   <div className="relative">
@@ -668,44 +720,41 @@ export default function App() {
                       name="format"
                       value={formData.format}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none bg-slate-50/50 appearance-none cursor-pointer"
+                      className={`${inputClasses()} pr-10 appearance-none cursor-pointer`}
                     >
                       {FORMATS.map(f => (
                         <option key={f.id} value={f.id}>{f.label}</option>
                       ))}
                     </select>
-                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <ChevronDown className="w-4 h-4 text-inksoft absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Document de référence (optionnel) */}
-            <div className="mt-8 pt-6 border-t border-slate-100">
-              <span className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-slate-400" />
-                Document de référence (optionnel)
-              </span>
-              <p className="text-xs text-slate-500 mb-3">
+            <div className="mt-9 pt-7 border-t border-line">
+              <span className={labelClasses}>Document de référence (optionnel)</span>
+              <p className="text-[13px] text-inksoft mb-3">
                 Chargez un document (cours, support, fiche) : l'IA s'appuiera sur son contenu pour différencier les activités.
               </p>
 
               {!docName ? (
-                <label className={`flex flex-col items-center justify-center gap-2 w-full px-4 py-6 rounded-xl border-2 border-dashed transition-all cursor-pointer ${
+                <label className={`flex flex-col items-center justify-center gap-2 w-full px-4 py-7 rounded-lg border border-dashed transition-colors cursor-pointer ${
                   extracting
-                    ? 'border-indigo-200 bg-indigo-50/40 cursor-wait'
-                    : 'border-slate-200 bg-slate-50/50 hover:border-indigo-300 hover:bg-indigo-50/30'
+                    ? 'border-bleu/40 bg-bleu-soft/40 cursor-wait'
+                    : 'border-line bg-paper hover:border-bleu/50 hover:bg-bleu-soft/30'
                 }`}>
                   {extracting ? (
                     <>
-                      <Loader className="w-6 h-6 text-indigo-500 animate-spin" />
-                      <span className="text-sm font-medium text-slate-600">Extraction du texte en cours…</span>
+                      <Loader className="w-5 h-5 text-bleu animate-spin" />
+                      <span className="text-sm font-medium text-inksoft">Extraction du texte en cours…</span>
                     </>
                   ) : (
                     <>
-                      <FileUp className="w-6 h-6 text-slate-400" />
-                      <span className="text-sm font-medium text-slate-600">Cliquez pour choisir un fichier (PDF, TXT, Markdown)</span>
-                      <span className="text-xs text-slate-400">Le fichier reste dans votre navigateur, il n'est pas stocké.</span>
+                      <FileUp className="w-5 h-5 text-inkfaint" />
+                      <span className="text-sm font-medium text-ink">Cliquez pour choisir un fichier</span>
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-inkfaint">PDF · TXT · Markdown — reste dans votre navigateur</span>
                     </>
                   )}
                   <input
@@ -717,16 +766,14 @@ export default function App() {
                   />
                 </label>
               ) : (
-                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-vert/40 bg-vert-soft">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="bg-emerald-100 p-2 rounded-lg shrink-0">
-                      <FileText className="w-4 h-4 text-emerald-600" />
-                    </div>
+                    <FileText className="w-4 h-4 text-vert shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{docName}</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm font-semibold text-ink truncate">{docName}</p>
+                      <p className="font-mono text-[10px] uppercase tracking-wider text-inksoft">
                         {docPages > 0 && `${docPages} page${docPages > 1 ? 's' : ''} · `}
-                        {docText.length.toLocaleString('fr-FR')} caractères extraits
+                        {docText.length.toLocaleString('fr-FR')} caractères
                         {docTruncated && ' (tronqué)'}
                       </p>
                     </div>
@@ -734,7 +781,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={clearDocument}
-                    className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    className="shrink-0 p-1.5 rounded-lg text-inksoft hover:text-rouge hover:bg-rouge-soft transition-colors"
                     title="Retirer le document"
                     aria-label="Retirer le document"
                   >
@@ -744,7 +791,7 @@ export default function App() {
               )}
 
               {docTruncated && (
-                <p className="mt-2 text-xs text-amber-600 flex items-center gap-1.5">
+                <p className="mt-2 text-xs text-rouge flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                   Document volumineux : seuls les {MAX_DOC_CHARS.toLocaleString('fr-FR')} premiers caractères seront utilisés.
                 </p>
@@ -752,30 +799,30 @@ export default function App() {
             </div>
 
             {/* Actions */}
-            <div className="mt-10 flex flex-col sm:flex-row gap-4 pt-6 border-t border-slate-100">
+            <div className="mt-9 flex flex-col sm:flex-row gap-3 pt-7 border-t border-line">
               <button
                 onClick={generateActivities}
                 disabled={loading}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 group"
+                className="flex-1 bg-bleu hover:bg-bleu-dark disabled:bg-bleu/50 text-white font-semibold py-3.5 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-bleu/60 focus-visible:ring-offset-2"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  <Sparkles className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  <Sparkles className="w-5 h-5" />
                 )}
                 {loading ? 'Génération en cours…' : result ? 'Régénérer les variantes' : 'Générer les variantes'}
               </button>
               <button
                 onClick={resetForm}
                 disabled={loading}
-                className="px-6 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
+                className="px-6 py-3.5 rounded-lg border border-line text-inksoft font-semibold hover:border-inkfaint hover:text-ink transition-colors disabled:opacity-50"
               >
                 Réinitialiser
               </button>
               <button
                 onClick={loadExample}
                 disabled={loading}
-                className="sm:hidden px-6 py-3.5 rounded-xl border border-indigo-100 text-indigo-600 font-bold bg-indigo-50 disabled:opacity-50"
+                className="sm:hidden px-6 py-3.5 rounded-lg border border-bleu/30 text-bleu font-semibold bg-bleu-soft disabled:opacity-50"
               >
                 Charger un exemple
               </button>
@@ -785,7 +832,7 @@ export default function App() {
               <div
                 ref={errorRef}
                 role="alert"
-                className="mt-4 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm"
+                className="mt-4 p-4 bg-rouge-soft border border-rouge/30 rounded-lg text-rouge text-sm"
               >
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -794,7 +841,7 @@ export default function App() {
                 {!loading && formData.theme.trim() && formData.objective.trim() && (
                   <button
                     onClick={generateActivities}
-                    className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors"
+                    className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rouge text-white text-xs font-semibold hover:opacity-90 transition-opacity"
                   >
                     <RefreshCcw className="w-3.5 h-3.5" />
                     Réessayer
@@ -813,17 +860,17 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="mb-12 bg-white rounded-2xl border border-indigo-100 shadow-sm p-8 text-center"
+              className="mb-12 bg-white rounded-xl border border-line p-8 text-center"
               aria-live="polite"
             >
-              <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-4" />
-              <p className="text-slate-800 font-semibold">{loadingMessage}</p>
-              <p className="text-sm text-slate-500 mt-1">
-                La génération prend généralement 20 à 40 secondes ({elapsed} s écoulée{elapsed > 1 ? 's' : ''}).
+              <Bifurcation mode="pulse" className="w-44 mx-auto mb-5 text-ink" />
+              <p className="font-display text-lg font-semibold">{loadingMessage}</p>
+              <p className="font-mono text-[11px] uppercase tracking-wider text-inksoft mt-2">
+                20 à 40 secondes en général · {elapsed} s écoulée{elapsed > 1 ? 's' : ''}
               </p>
-              <div className="mt-4 max-w-md mx-auto h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="mt-5 max-w-md mx-auto h-1 bg-line rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
+                  className="h-full bg-bleu rounded-full transition-all duration-1000"
                   style={{ width: `${progressPct}%` }}
                 />
               </div>
@@ -841,63 +888,68 @@ export default function App() {
               className="space-y-8 scroll-mt-24"
               id="results-print-area"
             >
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-slate-900">Vos variantes pédagogiques</h3>
-                <p className="text-slate-500">Trois approches adaptées pour un même objectif</p>
-                <div className="no-print mt-5 flex flex-wrap items-center justify-center gap-3">
+              <div className="text-center mb-2">
+                <p className="font-mono text-xs font-medium uppercase tracking-[0.22em] text-bleu mb-3">
+                  Résultat
+                </p>
+                <h2 className="font-display text-3xl font-bold tracking-tight">Vos variantes pédagogiques</h2>
+                <p className="text-inksoft mt-2">Trois chemins adaptés pour un même objectif</p>
+                <div className="no-print mt-6 flex flex-wrap items-center justify-center gap-3">
                   <button
                     onClick={handlePrint}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors shadow-sm"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-ink text-white text-sm font-semibold hover:opacity-85 transition-opacity"
                   >
                     <Printer className="w-4 h-4" />
                     Imprimer / Enregistrer en PDF
                   </button>
                   <button
                     onClick={handleCopy}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-line bg-white text-ink text-sm font-semibold hover:border-inkfaint transition-colors"
                   >
-                    {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    {copied ? <Check className="w-4 h-4 text-vert" /> : <Copy className="w-4 h-4" />}
                     {copied ? 'Copié' : 'Copier (Markdown)'}
                   </button>
                 </div>
-                <p className="no-print text-xs text-slate-400 mt-2">
-                  Astuce : dans la boîte d'impression, choisis « Enregistrer au format PDF ».
+                <p className="no-print font-mono text-[10px] uppercase tracking-wider text-inkfaint mt-3">
+                  Dans la boîte d'impression, choisir « Enregistrer au format PDF »
                 </p>
               </div>
 
               {/* Récapitulatif des paramètres (affiché et imprimé avec les fiches) */}
               {genParams && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Paramètres de l'activité</h4>
-                  <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                <div className="bg-white rounded-xl border border-line p-6">
+                  <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-inksoft mb-4">
+                    Paramètres de l'activité
+                  </h3>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2.5 text-sm">
                     <div>
-                      <dt className="font-semibold text-slate-500 inline">Thème : </dt>
-                      <dd className="text-slate-800 inline">{genParams.theme}</dd>
+                      <dt className="font-semibold text-inksoft inline">Thème : </dt>
+                      <dd className="text-ink inline">{genParams.theme}</dd>
                     </div>
                     <div className="sm:col-span-2 lg:col-span-2">
-                      <dt className="font-semibold text-slate-500 inline">Objectif : </dt>
-                      <dd className="text-slate-800 inline">{genParams.objective}</dd>
+                      <dt className="font-semibold text-inksoft inline">Objectif : </dt>
+                      <dd className="text-ink inline">{genParams.objective}</dd>
                     </div>
                     <div>
-                      <dt className="font-semibold text-slate-500 inline">Public : </dt>
-                      <dd className="text-slate-800 inline">{genParams.target || '—'}</dd>
+                      <dt className="font-semibold text-inksoft inline">Public : </dt>
+                      <dd className="text-ink inline">{genParams.target || '—'}</dd>
                     </div>
                     <div>
-                      <dt className="font-semibold text-slate-500 inline">Durée : </dt>
-                      <dd className="text-slate-800 inline">{genParams.duration || '—'}</dd>
+                      <dt className="font-semibold text-inksoft inline">Durée : </dt>
+                      <dd className="text-ink inline">{genParams.duration || '—'}</dd>
                     </div>
                     <div>
-                      <dt className="font-semibold text-slate-500 inline">Différenciation : </dt>
-                      <dd className="text-slate-800 inline">{DIFF_TYPE_LABEL(genParams.diffType)}</dd>
+                      <dt className="font-semibold text-inksoft inline">Différenciation : </dt>
+                      <dd className="text-ink inline">{DIFF_TYPE_LABEL(genParams.diffType)}</dd>
                     </div>
                     <div>
-                      <dt className="font-semibold text-slate-500 inline">Format : </dt>
-                      <dd className="text-slate-800 inline">{FORMAT_LABEL(genParams.format)}</dd>
+                      <dt className="font-semibold text-inksoft inline">Format : </dt>
+                      <dd className="text-ink inline">{FORMAT_LABEL(genParams.format)}</dd>
                     </div>
                     {genParams.docName && (
                       <div className="sm:col-span-2">
-                        <dt className="font-semibold text-slate-500 inline">Document de référence : </dt>
-                        <dd className="text-slate-800 inline">{genParams.docName}</dd>
+                        <dt className="font-semibold text-inksoft inline">Document de référence : </dt>
+                        <dd className="text-ink inline">{genParams.docName}</dd>
                       </div>
                     )}
                   </dl>
@@ -905,22 +957,28 @@ export default function App() {
               )}
 
               {/* Sélecteur de variante sur mobile (les 3 cartes restent côte à côte sur grand écran) */}
-              <div className="lg:hidden no-print flex rounded-xl border border-slate-200 bg-white p-1 gap-1" role="tablist" aria-label="Choix de la variante affichée">
-                {(Object.keys(VARIANT_META) as VariantKey[]).map(key => (
-                  <button
-                    key={key}
-                    role="tab"
-                    aria-selected={activeVariant === key}
-                    onClick={() => setActiveVariant(key)}
-                    className={`flex-1 px-2 py-2 rounded-lg text-xs font-bold transition-colors ${
-                      activeVariant === key
-                        ? 'bg-indigo-600 text-white'
-                        : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {VARIANT_META[key].label.replace('Version ', '')}
-                  </button>
-                ))}
+              <div className="lg:hidden no-print flex rounded-lg border border-line bg-white p-1 gap-1" role="tablist" aria-label="Choix de la variante affichée">
+                {(Object.keys(VARIANT_META) as VariantKey[]).map(key => {
+                  const active = activeVariant === key;
+                  const activeClasses: Record<PenColor, string> = {
+                    vert: 'bg-vert text-white',
+                    bleu: 'bg-bleu text-white',
+                    rouge: 'bg-rouge text-white'
+                  };
+                  return (
+                    <button
+                      key={key}
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setActiveVariant(key)}
+                      className={`flex-1 px-2 py-2.5 rounded-md font-mono text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                        active ? activeClasses[VARIANT_META[key].color] : 'text-inksoft hover:bg-paper'
+                      }`}
+                    >
+                      {VARIANT_META[key].short}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -947,13 +1005,14 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-20 border-t border-slate-200 py-10 bg-white">
+      <footer className="mt-16 border-t border-line py-10">
         <div className="max-w-5xl mx-auto px-4 text-center">
-          <p className="text-sm text-slate-500 font-medium">
+          <PenMark className="w-6 mx-auto mb-3 opacity-70" />
+          <p className="text-sm text-inksoft">
             Prototype de démonstration, à relire et ajuster par le formateur avant usage.
           </p>
-          <p className="text-xs text-slate-400 mt-2">
-            © 2026 Assistant de différenciation pédagogique • Sans collecte de données personnelles
+          <p className="font-mono text-[10px] uppercase tracking-wider text-inkfaint mt-2">
+            © 2026 Assistant de différenciation pédagogique · Sans collecte de données personnelles
           </p>
         </div>
       </footer>
@@ -964,32 +1023,37 @@ export default function App() {
 function VariantCard({ data, label, color, description, regenerating, disabled, onRegenerate }: {
   data: ActivityVariant;
   label: string;
-  color: 'emerald' | 'indigo' | 'amber';
+  color: PenColor;
   description: string;
   regenerating: boolean;
   disabled: boolean;
   onRegenerate: () => void;
 }) {
-  const colorClasses = {
-    emerald: 'border-emerald-200 bg-emerald-50/30 text-emerald-700',
-    indigo: 'border-indigo-200 bg-indigo-50/30 text-indigo-700',
-    amber: 'border-amber-200 bg-amber-50/30 text-amber-700'
+  const barClasses: Record<PenColor, string> = {
+    vert: 'bg-vert',
+    bleu: 'bg-bleu',
+    rouge: 'bg-rouge'
   };
-
-  const badgeClasses = {
-    emerald: 'bg-emerald-100 text-emerald-700',
-    indigo: 'bg-indigo-100 text-indigo-700',
-    amber: 'bg-amber-100 text-amber-700'
+  const badgeClasses: Record<PenColor, string> = {
+    vert: 'bg-vert-soft text-vert',
+    bleu: 'bg-bleu-soft text-bleu',
+    rouge: 'bg-rouge-soft text-rouge'
+  };
+  const dotClasses: Record<PenColor, string> = {
+    vert: 'bg-vert',
+    bleu: 'bg-bleu',
+    rouge: 'bg-rouge'
   };
 
   return (
     <motion.div
-      whileHover={{ y: -4 }}
-      className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full transition-opacity ${regenerating ? 'opacity-60' : ''}`}
+      whileHover={{ y: -3 }}
+      className={`bg-white rounded-xl border border-line overflow-hidden flex flex-col h-full transition-opacity ${regenerating ? 'opacity-60' : ''}`}
     >
-      <div className={`p-5 border-b ${colorClasses[color]}`}>
+      <div className={`h-1 ${barClasses[color]}`} />
+      <div className="p-5 border-b border-line">
         <div className="flex items-start justify-between gap-2">
-          <div className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-2 ${badgeClasses[color]}`}>
+          <div className={`inline-block px-2.5 py-1 rounded font-mono text-[10px] font-semibold uppercase tracking-[0.12em] mb-2.5 ${badgeClasses[color]}`}>
             {label}
           </div>
           <button
@@ -997,7 +1061,7 @@ function VariantCard({ data, label, color, description, regenerating, disabled, 
             disabled={disabled}
             title="Régénérer uniquement cette variante"
             aria-label={`Régénérer la ${label.toLowerCase()}`}
-            className="no-print shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-white/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="no-print shrink-0 p-1.5 rounded-lg text-inkfaint hover:text-bleu hover:bg-bleu-soft transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {regenerating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1006,22 +1070,22 @@ function VariantCard({ data, label, color, description, regenerating, disabled, 
             )}
           </button>
         </div>
-        <h4 className="text-lg font-bold text-slate-900 leading-tight">{data.title}</h4>
-        <p className="text-xs mt-1 opacity-80 font-medium">{description}</p>
+        <h3 className="font-display text-lg font-bold leading-snug">{data.title}</h3>
+        <p className="text-xs mt-1 text-inksoft">{description}</p>
       </div>
 
-      <div className="p-6 flex-1 space-y-6">
+      <div className="p-5 flex-1 space-y-6">
         <div>
-          <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Consigne</h5>
-          <p className="text-sm text-slate-700 leading-relaxed italic">"{data.instruction}"</p>
+          <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inkfaint mb-2">Consigne</h4>
+          <p className="text-sm text-ink leading-relaxed italic">"{data.instruction}"</p>
         </div>
 
         <div>
-          <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Déroulement</h5>
+          <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inkfaint mb-3">Déroulement</h4>
           <ul className="space-y-3">
             {data.steps.map((step, i) => (
-              <li key={i} className="flex gap-3 text-sm text-slate-600">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
+              <li key={i} className="flex gap-3 text-sm text-inksoft leading-relaxed">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-paper border border-line flex items-center justify-center font-mono text-[10px] font-semibold text-inksoft">
                   {i + 1}
                 </span>
                 {step}
@@ -1030,26 +1094,26 @@ function VariantCard({ data, label, color, description, regenerating, disabled, 
           </ul>
         </div>
 
-        <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-          <h5 className="text-xs font-bold text-slate-500 mb-2">Accompagnement attendu</h5>
-          <p className="text-sm text-slate-600">{data.supportLevel}</p>
+        <div className="p-4 bg-paper rounded-lg border border-line">
+          <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inksoft mb-2">Accompagnement attendu</h4>
+          <p className="text-sm text-inksoft leading-relaxed">{data.supportLevel}</p>
         </div>
 
         <div>
-          <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Critères de réussite</h5>
+          <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inkfaint mb-3">Critères de réussite</h4>
           <ul className="space-y-2">
             {data.successCriteria.map((criterion, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+              <li key={i} className="flex items-start gap-2.5 text-sm text-inksoft leading-relaxed">
+                <div className={`mt-[7px] w-1.5 h-1.5 rounded-full shrink-0 ${dotClasses[color]}`} />
                 {criterion}
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="pt-4 border-t border-slate-100">
-          <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Pour aller plus loin</h5>
-          <p className="text-sm text-slate-600 leading-relaxed">{data.extension}</p>
+        <div className="pt-4 border-t border-line">
+          <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inkfaint mb-2">Pour aller plus loin</h4>
+          <p className="text-sm text-inksoft leading-relaxed">{data.extension}</p>
         </div>
       </div>
     </motion.div>

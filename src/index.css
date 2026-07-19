@@ -1,13 +1,73 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", "Instrument Sans", ui-sans-serif, sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Palette « stylo 4 couleurs » : encre sur papier, un chemin par version. */
+  --color-paper: #fafaf7;
+  --color-ink: #16181f;
+  --color-inksoft: #5a5e6b;
+  --color-inkfaint: #9a9daa;
+  --color-line: #e4e4dc;
+  --color-bleu: #1d3db0;
+  --color-bleu-dark: #172f8c;
+  --color-bleu-soft: #eceffa;
+  --color-vert: #1e7a4f;
+  --color-vert-soft: #e9f4ee;
+  --color-rouge: #c53a2e;
+  --color-rouge-soft: #fbedeb;
 }
 
 @layer base {
   body {
-    @apply antialiased;
+    @apply antialiased bg-paper text-ink;
+  }
+}
+
+/* Signature : le tracé qui bifurque (une entrée, trois chemins). */
+.path-draw {
+  stroke-dasharray: 340;
+  stroke-dashoffset: 340;
+  animation: draw-path 1.1s ease-out forwards;
+}
+.path-draw-2 { animation-delay: 0.18s; }
+.path-draw-3 { animation-delay: 0.36s; }
+@keyframes draw-path {
+  to { stroke-dashoffset: 0; }
+}
+
+.dot-reveal {
+  opacity: 0;
+  animation: reveal-dot 0.3s ease-out forwards;
+  animation-delay: 1s;
+}
+@keyframes reveal-dot {
+  to { opacity: 1; }
+}
+
+.path-pulse { animation: pulse-path 1.8s ease-in-out infinite; }
+.path-pulse-2 { animation-delay: 0.3s; }
+.path-pulse-3 { animation-delay: 0.6s; }
+@keyframes pulse-path {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .path-draw, .path-draw-2, .path-draw-3 {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .dot-reveal {
+    animation: none;
+    opacity: 1;
+  }
+  .path-pulse, .path-pulse-2, .path-pulse-3 {
+    animation: none;
+    opacity: 1;
   }
 }
 
