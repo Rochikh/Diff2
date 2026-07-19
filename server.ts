@@ -1,14 +1,22 @@
+import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import {
+  validateParams,
+  buildPrompt,
+  callDeepSeek,
+  rateLimited,
+  RATE_LIMIT_MESSAGE
+} from "./api/_lib";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
@@ -29,56 +37,28 @@ app.get("/api/health", (req, res) => {
 });
 
 app.post("/api/generate", async (req, res) => {
+  const ip = req.ip || "unknown";
+  if (rateLimited(ip)) {
+    return res.status(429).json({ error: RATE_LIMIT_MESSAGE });
+  }
+
   try {
-    const { prompt } = req.body;
-    
-    if (!prompt) {
-      return res.status(400).json({ error: "Missing prompt" });
+    const validation = validateParams(req.body);
+    if ("error" in validation) {
+      return res.status(400).json({ error: validation.error });
     }
 
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-    if (!OPENROUTER_API_KEY) {
-      return res.status(500).json({ error: "OPENROUTER_API_KEY is not configured on the server." });
+    const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+    if (!DEEPSEEK_API_KEY) {
+      return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured on the server." });
     }
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "deepseek/deepseek-v4-flash",
-        messages: [
-          {
-            role: "system",
-            content: "Tu es un assistant pédagogique expert. Tu réponds EXCLUSIVEMENT par un objet JSON valide, sans texte avant ni après, sans bloc markdown, sans commentaire. Si la consigne demande une structure précise, respecte-la à la lettre."
-          },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.4,
-        response_format: { type: "json_object" }
-      })
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("OpenRouter API Error:", response.status, errText);
-      const detail = errText.slice(0, 500);
-      return res.status(response.status).json({
-        error: `OpenRouter API failed (${response.status} ${response.statusText}): ${detail}`
-      });
+    const result = await callDeepSeek(buildPrompt(validation.params), DEEPSEEK_API_KEY);
+    if (result.ok === false) {
+      return res.status(result.status).json({ error: result.error });
     }
 
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    
-    if (!content) {
-      return res.status(500).json({ error: "No content returned from OpenRouter" });
-    }
-
-    res.json({ content });
-
+    res.json({ content: result.content });
   } catch (error) {
     console.error("Error generating content:", error);
     res.status(500).json({ error: "Internal server error during content generation" });

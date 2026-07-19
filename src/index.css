@@ -31,6 +31,10 @@
   #results-print-area .grid {
     display: block !important;
   }
+  /* Les 3 cartes s'impriment toutes, même si le sélecteur mobile n'en affiche qu'une. */
+  #results-print-area .variant-card {
+    display: block !important;
+  }
   #results-print-area .grid > * {
     page-break-inside: avoid;
     margin-bottom: 1rem;
