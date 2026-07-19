@@ -13,7 +13,8 @@ import {
   FileText,
   X,
   Loader,
-  ChevronDown
+  ChevronDown,
+  ArrowUpRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -72,17 +73,17 @@ const DIFF_TYPES = [
   {
     id: 'autonomie',
     label: 'Niveau d’autonomie',
-    description: 'Ajuste la quantité de directives données. Les élèves guidés ont des étapes très détaillées, tandis que les élèves autonomes doivent planifier eux-mêmes leur démarche.'
+    description: 'Ajuste la quantité de directives données. Les apprenants guidés ont des étapes très détaillées, tandis que les apprenants autonomes doivent planifier eux-mêmes leur démarche.'
   },
   {
     id: 'complexite',
     label: 'Niveau de complexité',
-    description: 'Modifie la difficulté cognitive de la tâche. Les élèves en difficulté traitent des concepts simples, tandis que les élèves avancés analysent, synthétisent ou évaluent des concepts complexes.'
+    description: 'Modifie la difficulté cognitive de la tâche. Les apprenants en difficulté traitent des concepts simples, tandis que les apprenants avancés analysent, synthétisent ou évaluent des concepts complexes.'
   },
   {
     id: 'etayage',
     label: 'Niveau d’étayage (scaffolding)',
-    description: 'Varie les outils d\'aide fournis. Les élèves ayant besoin de soutien reçoivent des glossaires, des modèles ou des amorces de phrases, qui sont retirés pour les autres.'
+    description: 'Varie les outils d\'aide fournis. Les apprenants ayant besoin de soutien reçoivent des glossaires, des modèles ou des amorces de phrases, qui sont retirés pour les autres.'
   }
 ];
 
@@ -1005,10 +1006,31 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-16 border-t border-line py-10">
+      <footer className="mt-16 border-t border-line py-12">
         <div className="max-w-5xl mx-auto px-4 text-center">
-          <PenMark className="w-6 mx-auto mb-3 opacity-70" />
-          <p className="text-sm text-inksoft">
+          <PenMark className="w-6 mx-auto mb-4 opacity-70" />
+          <p className="text-[15px]">
+            Un outil conçu par{' '}
+            <a
+              href="https://rochane.fr"
+              target="_blank"
+              rel="noopener"
+              className="font-display font-bold text-bleu hover:text-bleu-dark underline decoration-2 underline-offset-4 decoration-bleu/30 hover:decoration-bleu-dark transition-colors"
+            >
+              Rochane Kherbouche
+            </a>
+            , technopédagogue.
+          </p>
+          <a
+            href="https://rochane.fr"
+            target="_blank"
+            rel="noopener"
+            className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-bleu/40 bg-white text-bleu text-sm font-semibold hover:bg-bleu hover:text-white transition-colors"
+          >
+            Découvrir toutes mes activités sur rochane.fr
+            <ArrowUpRight className="w-4 h-4" />
+          </a>
+          <p className="text-sm text-inksoft mt-6">
             Prototype de démonstration, à relire et ajuster par le formateur avant usage.
           </p>
           <p className="font-mono text-[10px] uppercase tracking-wider text-inkfaint mt-2">
