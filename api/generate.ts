@@ -5,7 +5,7 @@ import {
   callDeepSeek,
   rateLimited,
   RATE_LIMIT_MESSAGE
-} from './_lib';
+} from './_lib.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Le frontend est servi sur le même domaine : pas d'en-têtes CORS,
