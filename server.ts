@@ -4,18 +4,18 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import { rateLimit } from "express-rate-limit";
 import {
   validateParams,
   buildPrompt,
-  callDeepSeek,
-  rateLimited,
-  RATE_LIMIT_MESSAGE
-} from "./api/_lib";
+  callDeepSeek
+} from "./lib/_lib";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
@@ -36,12 +36,16 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.post("/api/generate", async (req, res) => {
-  const ip = req.ip || "unknown";
-  if (rateLimited(ip)) {
-    return res.status(429).json({ error: RATE_LIMIT_MESSAGE });
-  }
+// Limite de débit : 60 requêtes par IP par 10 minutes (salle de formation derrière une même IP publique).
+const generateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de requêtes. Réessayez dans quelques minutes." },
+});
 
+app.post("/api/generate", generateLimiter, async (req, res) => {
   try {
     const validation = validateParams(req.body);
     if ("error" in validation) {

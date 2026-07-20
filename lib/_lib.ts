@@ -1,5 +1,4 @@
-// Logique partagée entre la fonction Vercel (api/generate.ts) et le serveur
-// de développement (server.ts). Le prompt est construit ici, côté serveur :
+// Logique serveur utilisée par server.ts. Le prompt est construit ici, côté serveur :
 // le client n'envoie que des champs de formulaire validés, jamais un prompt libre.
 
 export const DIFF_TYPE_LABELS: Record<string, string> = {
@@ -163,24 +162,3 @@ export async function callDeepSeek(
   }
   return { ok: true, content };
 }
-
-// Limite de débit best effort (mémoire d'instance) : suffisant pour décourager
-// l'abus simple, sans dépendance externe.
-const RATE_WINDOW_MS = 60_000;
-const RATE_MAX_HITS = 8;
-const hits = new Map<string, number[]>();
-
-export function rateLimited(ip: string): boolean {
-  const now = Date.now();
-  const recent = (hits.get(ip) || []).filter(t => now - t < RATE_WINDOW_MS);
-  if (recent.length >= RATE_MAX_HITS) {
-    hits.set(ip, recent);
-    return true;
-  }
-  recent.push(now);
-  hits.set(ip, recent);
-  return false;
-}
-
-export const RATE_LIMIT_MESSAGE =
-  'Trop de générations rapprochées. Merci de patienter une minute avant de réessayer.';
