@@ -19,6 +19,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { buildMarkdown as buildVariantsMarkdown } from './markdown';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -299,28 +300,15 @@ export default function App() {
 
   const buildMarkdown = (data: GenerationResult): string => {
     const p = genParams;
-    const variantToMd = (label: string, v: ActivityVariant) => {
-      return `## ${label} — ${v.title}\n\n` +
-        `**Consigne apprenants** : ${v.instruction}\n\n` +
-        `**Déroulement**\n${v.steps.map((s, i) => `${i + 1}. ${s.minutes != null ? `(${s.minutes} min) ` : ''}${s.text}`).join('\n')}\n\n` +
-        `**Notes pour le formateur** : ${v.supportLevel}\n\n` +
-        `**Critères de réussite**\n${v.successCriteria.map(c => `- ${c}`).join('\n')}\n\n` +
-        `**Pour aller plus loin** : ${v.extension}\n`;
-    };
-    const header = `# Variantes pédagogiques différenciées\n\n` +
-      `- **Thème** : ${p?.theme || formData.theme}\n` +
-      `- **Objectif** : ${p?.objective || formData.objective}\n` +
-      `- **Public** : ${p?.target || '—'}\n` +
-      `- **Durée** : ${p?.duration || '—'}\n` +
-      `- **Type de différenciation** : ${DIFF_TYPE_LABEL(p?.diffType || formData.diffType)}\n` +
-      `- **Format** : ${FORMAT_LABEL(p?.format || formData.format)}\n` +
-      (p?.docName ? `- **Document de référence** : ${p.docName}\n` : '') +
-      `\n`;
-    return header +
-      variantToMd('Version très guidée', data.guided) + '\n' +
-      variantToMd('Version standard', data.standard) + '\n' +
-      variantToMd('Version défi', data.challenge) +
-      (data.organization ? `\n## Organisation\n\n${data.organization}\n` : '');
+    return buildVariantsMarkdown(data, {
+      theme: p?.theme || formData.theme,
+      objective: p?.objective || formData.objective,
+      target: p?.target || '',
+      duration: p?.duration || '',
+      diffTypeLabel: DIFF_TYPE_LABEL(p?.diffType || formData.diffType),
+      formatLabel: FORMAT_LABEL(p?.format || formData.format),
+      docName: p?.docName
+    });
   };
 
   const handlePrint = () => window.print();
