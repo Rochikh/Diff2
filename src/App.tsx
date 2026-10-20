@@ -28,10 +28,16 @@ const MAX_DOC_CHARS = 50000;
 
 const STORAGE_KEY = 'diff-assistant-v1';
 
+// minutes absent : résultat sauvegardé avant l'ajout des durées par étape.
+interface Step {
+  minutes?: number;
+  text: string;
+}
+
 interface ActivityVariant {
   title: string;
   instruction: string;
-  steps: string[];
+  steps: Step[];
   supportLevel: string;
   successCriteria: string[];
   extension: string;
@@ -43,6 +49,7 @@ interface GenerationResult {
   guided: ActivityVariant;
   standard: ActivityVariant;
   challenge: ActivityVariant;
+  organization?: string;
 }
 
 interface FormFields {
@@ -130,9 +137,13 @@ function parseAIJson(raw: string): any {
 // cette numérotation, l'interface affiche déjà la sienne.
 function normalizeVariant(v: ActivityVariant): ActivityVariant {
   const strip = (s: string) => s.replace(/^\s*(?:\d+[.)]\s*|[-•]\s*)/, '').trim();
+  const toStep = (s: any): Step =>
+    typeof s === 'string'
+      ? { text: strip(s) }
+      : { minutes: typeof s?.minutes === 'number' ? s.minutes : undefined, text: strip(String(s?.text ?? '')) };
   return {
     ...v,
-    steps: v.steps.map(strip),
+    steps: v.steps.map(toStep),
     successCriteria: v.successCriteria.map(strip)
   };
 }
@@ -216,7 +227,8 @@ export default function App() {
           setResult({
             guided: normalizeVariant(s.result.guided),
             standard: normalizeVariant(s.result.standard),
-            challenge: normalizeVariant(s.result.challenge)
+            challenge: normalizeVariant(s.result.challenge),
+            organization: typeof s.result.organization === 'string' ? s.result.organization : undefined
           });
         }
         if (s.genParams) setGenParams(s.genParams);
@@ -289,9 +301,9 @@ export default function App() {
     const p = genParams;
     const variantToMd = (label: string, v: ActivityVariant) => {
       return `## ${label} — ${v.title}\n\n` +
-        `**Consigne** : ${v.instruction}\n\n` +
-        `**Déroulement**\n${v.steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\n` +
-        `**Accompagnement attendu** : ${v.supportLevel}\n\n` +
+        `**Consigne apprenants** : ${v.instruction}\n\n` +
+        `**Déroulement**\n${v.steps.map((s, i) => `${i + 1}. ${s.minutes != null ? `(${s.minutes} min) ` : ''}${s.text}`).join('\n')}\n\n` +
+        `**Notes pour le formateur** : ${v.supportLevel}\n\n` +
         `**Critères de réussite**\n${v.successCriteria.map(c => `- ${c}`).join('\n')}\n\n` +
         `**Pour aller plus loin** : ${v.extension}\n`;
     };
@@ -307,7 +319,8 @@ export default function App() {
     return header +
       variantToMd('Version très guidée', data.guided) + '\n' +
       variantToMd('Version standard', data.standard) + '\n' +
-      variantToMd('Version défi', data.challenge);
+      variantToMd('Version défi', data.challenge) +
+      (data.organization ? `\n## Organisation\n\n${data.organization}\n` : '');
   };
 
   const handlePrint = () => window.print();
@@ -493,7 +506,8 @@ export default function App() {
       setResult({
         guided: normalizeVariant(data.guided),
         standard: normalizeVariant(data.standard),
-        challenge: normalizeVariant(data.challenge)
+        challenge: normalizeVariant(data.challenge),
+        organization: typeof data.organization === 'string' ? data.organization : undefined
       });
       setGenParams({ ...formData, docName });
       setActiveVariant('guided');
@@ -1000,6 +1014,13 @@ export default function App() {
                   </div>
                 ))}
               </div>
+
+              {result.organization && (
+                <div className="mt-6 p-5 bg-paper rounded-xl border border-line">
+                  <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inksoft mb-2">Organisation</h4>
+                  <p className="text-sm text-inksoft leading-relaxed whitespace-pre-line">{result.organization}</p>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1098,7 +1119,7 @@ function VariantCard({ data, label, color, description, regenerating, disabled, 
 
       <div className="p-5 flex-1 space-y-6">
         <div>
-          <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inkfaint mb-2">Consigne</h4>
+          <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inkfaint mb-2">Consigne apprenants</h4>
           <p className="text-sm text-ink leading-relaxed italic">"{data.instruction}"</p>
         </div>
 
@@ -1110,14 +1131,19 @@ function VariantCard({ data, label, color, description, regenerating, disabled, 
                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-paper border border-line flex items-center justify-center font-mono text-[10px] font-semibold text-inksoft">
                   {i + 1}
                 </span>
-                {step}
+                <span>
+                  {step.minutes != null && (
+                    <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-inkfaint mr-1.5">{step.minutes} min</span>
+                  )}
+                  {step.text}
+                </span>
               </li>
             ))}
           </ul>
         </div>
 
         <div className="p-4 bg-paper rounded-lg border border-line">
-          <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inksoft mb-2">Accompagnement attendu</h4>
+          <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inksoft mb-2">Notes pour le formateur</h4>
           <p className="text-sm text-inksoft leading-relaxed">{data.supportLevel}</p>
         </div>
 
