@@ -9,6 +9,7 @@ export interface MarkdownVariant {
   supportLevel: string;
   successCriteria: string[];
   extension: string;
+  calcWarnings?: string[];
 }
 
 export interface MarkdownResult {
@@ -16,6 +17,7 @@ export interface MarkdownResult {
   standard: MarkdownVariant;
   challenge: MarkdownVariant;
   organization?: string;
+  organizationCalcWarnings?: string[];
 }
 
 export interface MarkdownHeader {
@@ -31,9 +33,13 @@ export interface MarkdownHeader {
 export const stepToMd = (s: { minutes?: number; text: string }) =>
   `${s.minutes != null ? `(${s.minutes} min) ` : ''}${s.text}`;
 
+// Même libellé et même place que sur les cartes : en tête de la variante, sous l'organisation.
+const warningsToMd = (w?: string[]) => (w?.length ? w.map(x => `> **Vérifiez le calcul** : ${x}\n`).join('>\n') + '\n' : '');
+
 export function buildMarkdown(data: MarkdownResult, h: MarkdownHeader): string {
   const variantToMd = (label: string, v: MarkdownVariant) => {
     return `## ${label} — ${v.title}\n\n` +
+      warningsToMd(v.calcWarnings) +
       `**Consigne apprenants**\n\n${v.instruction}\n\n` +
       `**Déroulement**\n${v.steps.map((s, i) => `${i + 1}. ${stepToMd(s)}`).join('\n')}\n\n` +
       (v.handout ? `**Support à distribuer**\n\n${v.handout}\n\n` : '') +
@@ -54,5 +60,5 @@ export function buildMarkdown(data: MarkdownResult, h: MarkdownHeader): string {
     variantToMd('Version très guidée', data.guided) + '\n' +
     variantToMd('Version standard', data.standard) + '\n' +
     variantToMd('Version défi', data.challenge) +
-    (data.organization ? `\n## Organisation\n\n${data.organization}\n` : '');
+    (data.organization ? `\n## Organisation\n\n${data.organization}\n` + (data.organizationCalcWarnings?.length ? '\n' + warningsToMd(data.organizationCalcWarnings) : '') : '');
 }
