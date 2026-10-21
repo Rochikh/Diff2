@@ -64,16 +64,17 @@ export function validateParams(body: unknown): { params: GenerateParams } | { er
 }
 
 const VARIANT_STRUCTURE =
-  '{ "title": "...", "instruction": "...", "steps": [{ "minutes": 5, "text": "..." }], "supportLevel": "...", "successCriteria": ["..."], "extension": "..." }';
+  '{ "title": "...", "instruction": "...", "steps": [{ "minutes": 5, "text": "..." }], "handout": "...", "supportLevel": "...", "successCriteria": ["..."], "extension": "..." }';
 
 const LENGTH_LIMITS = `Limites de longueur (strictes, en mots) :
 - title : 6 mots maximum.
-- instruction : 50 mots maximum.
+- instruction : 70 mots maximum.
+- handout : 120 mots maximum.
 - steps : 3 ou 4 étapes maximum ; chaque étape 30 mots maximum, durée comprise (le texte de l'étape fait donc 28 mots maximum).
 - supportLevel : 50 mots maximum.
 - successCriteria : 3 critères maximum, 15 mots maximum chacun.
 - extension : 20 mots maximum.
-- Une version complète (tous champs réunis) : 120 mots maximum.
+- Une version complète (tous champs réunis, handout non compris) : 120 mots maximum.
 Phrases courtes. Chaque information n'apparaît qu'une fois : un champ ne répète jamais ce qu'un autre dit déjà (par exemple, les notes pour le formateur ne redisent pas les étapes, la consigne ne redit pas les critères).`;
 
 const SELF_CHECK = `Avant de répondre, vérifie en silence chaque point ci-dessous sur ta réponse complète. Si un point échoue, corrige la réponse, puis renvoie uniquement la version corrigée. Cette vérification reste interne : rien de son contenu n'apparaît dans la réponse (aucun champ, commentaire ou mention de vérification).
@@ -84,7 +85,8 @@ const SELF_CHECK = `Avant de répondre, vérifie en silence chaque point ci-dess
 5. Une seule variable de différenciation : les versions diffèrent uniquement par le type de différenciation choisi ; chaque version diffère de la précédente par au moins un élément nommé de ce type ; en étayage ou en autonomie, la production attendue est la même dans les trois versions.
 6. Mise en commun réaliste : chaque phase devant la classe entière fixe un nombre de passages dont la durée totale tient dans l'étape ; aucune étape n'est consacrée uniquement à de l'organisation.
 7. Étayage cloisonné : aucune aide propre à une version n'est présentée devant la classe entière ; aucune consigne ne contient l'aide retirée à sa version ; chaque critère de réussite s'applique à tous les apprenants ; le support de la version la plus guidée couvre chaque élément exigé par les critères de réussite, y compris les conversions d'unités.
-8. Longueurs respectées : chaque champ tient dans sa limite de mots, aucune information n'est répétée d'un champ à l'autre.`;
+8. Aide visible : chaque version a un "handout" rédigé en entier, ou indique qu'elle n'a aucun support ; en étayage ou en autonomie, deux versions n'ont jamais la même consigne mot pour mot, et l'aide de chaque version se lit dans sa consigne et son support ; une information qui facilite la tâche (nombre de réponses attendues, réponse partielle, méthode) n'apparaît que dans la version la plus guidée ; chaque calcul cité est juste.
+9. Longueurs respectées : chaque champ tient dans sa limite de mots, aucune information n'est répétée d'un champ à l'autre.`;
 
 export function buildPrompt(p: GenerateParams): string {
   const docSection = p.docText
@@ -111,6 +113,8 @@ Règles pédagogiques :
 - Un élément d'étayage propre à une version (modèle, exemple résolu, liste, fiche guide) n'est jamais présenté devant la classe entière : il est donné uniquement aux apprenants de cette version.
 - Le support de la version la plus guidée couvre chaque élément exigé par les critères de réussite : chaque élément attendu apparaît dans le modèle ou l'exemple fourni.
 - La consigne de chaque version est donnée uniquement aux apprenants de cette version.
+- Quand la différenciation porte sur l'étayage ou l'autonomie, l'aide de chaque version se voit dans sa consigne et dans son support, pas seulement dans les notes pour le formateur : deux versions n'ont jamais la même consigne mot pour mot.
+- Une information qui facilite la tâche (nombre de réponses attendues, réponse partielle, méthode à suivre) n'apparaît que dans la version la plus guidée : aucune version moins guidée ne la reçoit, ni dans sa consigne ni dans son support.
 - La consigne d'une version ne contient pas l'aide qui est retirée à cette version (par exemple, pas de liste des éléments attendus dans la consigne d'une version qui n'a pas de liste).
 - Quand la différenciation porte sur l'étayage ou l'autonomie, la production attendue et les critères de réussite portent sur la même tâche dans les trois versions : la version défi retire de l'aide et n'ajoute aucune exigence de contenu ou de forme (étape supplémentaire, contrainte de forme, contenu hors objectif, etc.).
 - ${VARIANT_DEFINITIONS.guided}
@@ -122,7 +126,9 @@ Règles pédagogiques :
 - IMPORTANT : Réponds UNIQUEMENT avec un objet JSON strict. Pas de markdown autour, pas de "Voici le résultat". Juste le JSON.
 
 Directives spécifiques pour le contenu :
-- Consigne (instruction) : texte destiné aux apprenants, que le formateur lit ou distribue tel quel. Adresse-toi directement à eux (vouvoiement ou tutoiement, de façon constante), en phrases courtes, avec un vocabulaire accessible au public décrit ; explique les termes techniques ou du métier si nécessaire. Uniquement si l'activité porte sur l'apprentissage d'une langue ou si le public est décrit par un niveau CECRL : adapte le vocabulaire et les temps à ce niveau, et pour un niveau A1 ou A2 utilise uniquement le présent, l'impératif et le futur proche.
+- Consigne (instruction) : texte destiné aux apprenants, que le formateur lit ou distribue tel quel. Adresse-toi directement à eux (vouvoiement ou tutoiement, de façon constante), en phrases complètes et courtes, avec un vocabulaire accessible au public décrit ; explique les termes techniques ou du métier si nécessaire. Uniquement si l'activité porte sur l'apprentissage d'une langue ou si le public est décrit par un niveau CECRL : adapte le vocabulaire et les temps à ce niveau, et pour un niveau A1 ou A2 utilise uniquement le présent, l'impératif et le futur proche.
+  Présente les données de la situation de façon lisible : quand il y en a plusieurs, une donnée par ligne (lignes séparées par \\n et commençant par "- ") ou un tableau simple (une ligne par rangée, colonnes séparées par " | ").
+- Support à distribuer (handout) : document remis aux apprenants de cette version, rédigé en entier et prêt à imprimer (exemple résolu, rappel, tableau, questions guides), jamais une simple description du type « une fiche avec un exemple ». Même mise en forme que la consigne pour les listes et tableaux. La version la plus autonome peut n'avoir aucun support : le champ contient alors exactement « Aucun support : la consigne suffit. ».
 - Notes pour le formateur (supportLevel) : texte destiné au formateur seul : étayage à apporter dans cette version, points de vigilance, ce qu'il observe et comment il intervient.
 - Déroulement en étapes (steps) : Sois concret : une action précise par étape. Chaque étape porte sa durée en minutes (entier, champ "minutes"). La somme des minutes est exactement égale à la durée estimée. Chaque étape comporte une production des apprenants : les actions d'organisation (former les groupes, distribuer, choisir des volontaires) s'intègrent à une étape de travail, jamais à une étape à part. Si l'activité se fait en groupes, tiens compte de leur taille : quand les apprenants présentent ou restituent, précise si c'est devant leur sous-groupe ou devant la classe entière, et prévois assez de temps pour que chacun passe. L'effectif de la classe est inconnu : pour une phase devant la classe entière, fixe un nombre précis de passages (par exemple 2 ou 3) et une durée par passage, dont le total tient dans la durée de l'étape ; ne fais jamais passer « chaque groupe ».
 - Critères de réussite (successCriteria) : Utilise un langage clair, mesurable et actionnable. Exemple : "L'apprenant a formulé 2 arguments basés sur le texte" plutôt que "L'apprenant a compris le texte". Tout nombre cité correspond exactement au nombre d'éléments listés dans le déroulé ou le support de la même version. Chaque critère s'applique à tous les apprenants de la version (pas de critère qui porte sur un passage que seuls certains apprenants font).
@@ -161,7 +167,7 @@ La réponse DOIT ABSOLUMENT être un objet JSON valide avec cette structure EXAC
 }
 
 ${SELF_CHECK}
-9. Organisation : le bloc "organization" explique le fonctionnement en parallèle et la répartition par critères observables, parle d'un objectif commun et jamais d'une consigne commune, tient dans la durée indiquée, aligne les phases en classe entière, précise la composition des sous-groupes s'il y en a et ne contredit aucune étape, en 80 mots maximum.`;
+10. Organisation : le bloc "organization" explique le fonctionnement en parallèle et la répartition par critères observables, parle d'un objectif commun et jamais d'une consigne commune, tient dans la durée indiquée, aligne les phases en classe entière, précise la composition des sous-groupes s'il y en a et ne contredit aucune étape, en 80 mots maximum.`;
 }
 
 export async function callDeepSeek(

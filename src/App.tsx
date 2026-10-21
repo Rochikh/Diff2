@@ -39,6 +39,8 @@ interface ActivityVariant {
   title: string;
   instruction: string;
   steps: Step[];
+  // Absent des résultats sauvegardés avant l'ajout du support à distribuer.
+  handout?: string;
   supportLevel: string;
   successCriteria: string[];
   extension: string;
@@ -1108,7 +1110,7 @@ function VariantCard({ data, label, color, description, regenerating, disabled, 
       <div className="p-5 flex-1 space-y-6">
         <div>
           <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inkfaint mb-2">Consigne apprenants</h4>
-          <p className="text-sm text-ink leading-relaxed italic">"{data.instruction}"</p>
+          <p className="text-sm text-ink leading-relaxed whitespace-pre-line">{data.instruction}</p>
         </div>
 
         <div>
@@ -1129,6 +1131,13 @@ function VariantCard({ data, label, color, description, regenerating, disabled, 
             ))}
           </ul>
         </div>
+
+        {data.handout && (
+          <div className="p-4 rounded-lg border border-dashed border-line">
+            <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inkfaint mb-2">Support à distribuer</h4>
+            <p className="text-sm text-ink leading-relaxed whitespace-pre-line">{data.handout}</p>
+          </div>
+        )}
 
         <div className="p-4 bg-paper rounded-lg border border-line">
           <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inksoft mb-2">Notes pour le formateur</h4>

@@ -5,6 +5,7 @@ export interface MarkdownVariant {
   title: string;
   instruction: string;
   steps: { minutes?: number; text: string }[];
+  handout?: string;
   supportLevel: string;
   successCriteria: string[];
   extension: string;
@@ -33,8 +34,9 @@ export const stepToMd = (s: { minutes?: number; text: string }) =>
 export function buildMarkdown(data: MarkdownResult, h: MarkdownHeader): string {
   const variantToMd = (label: string, v: MarkdownVariant) => {
     return `## ${label} — ${v.title}\n\n` +
-      `**Consigne apprenants** : ${v.instruction}\n\n` +
+      `**Consigne apprenants**\n\n${v.instruction}\n\n` +
       `**Déroulement**\n${v.steps.map((s, i) => `${i + 1}. ${stepToMd(s)}`).join('\n')}\n\n` +
+      (v.handout ? `**Support à distribuer**\n\n${v.handout}\n\n` : '') +
       `**Notes pour le formateur** : ${v.supportLevel}\n\n` +
       `**Critères de réussite**\n${v.successCriteria.map(c => `- ${c}`).join('\n')}\n\n` +
       `**Pour aller plus loin** : ${v.extension}\n`;
