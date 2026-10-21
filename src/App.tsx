@@ -44,6 +44,8 @@ interface ActivityVariant {
   supportLevel: string;
   successCriteria: string[];
   extension: string;
+  // Calculs restés faux après la relance de correction (contrôle côté serveur).
+  calcWarnings?: string[];
 }
 
 type VariantKey = 'guided' | 'standard' | 'challenge';
@@ -53,6 +55,7 @@ interface GenerationResult {
   standard: ActivityVariant;
   challenge: ActivityVariant;
   organization?: string;
+  organizationCalcWarnings?: string[];
 }
 
 interface FormFields {
@@ -163,6 +166,17 @@ function isValidVariant(v: any): v is ActivityVariant {
   );
 }
 
+function CalcWarnings({ warnings }: { warnings?: string[] }) {
+  if (!warnings?.length) return null;
+  return (
+    <div role="alert" className="p-3 rounded-lg bg-rouge-soft text-rouge text-sm leading-relaxed">
+      {warnings.map((w, i) => (
+        <p key={i}>Vérifiez le calcul : {w}</p>
+      ))}
+    </div>
+  );
+}
+
 // Signature visuelle : une entrée, trois chemins.
 function Bifurcation({ mode = 'draw', className }: { mode?: 'draw' | 'pulse'; className?: string }) {
   const anim = (n: 1 | 2 | 3) =>
@@ -231,7 +245,8 @@ export default function App() {
             guided: normalizeVariant(s.result.guided),
             standard: normalizeVariant(s.result.standard),
             challenge: normalizeVariant(s.result.challenge),
-            organization: typeof s.result.organization === 'string' ? s.result.organization : undefined
+            organization: typeof s.result.organization === 'string' ? s.result.organization : undefined,
+            organizationCalcWarnings: s.result.organizationCalcWarnings
           });
         }
         if (s.genParams) setGenParams(s.genParams);
@@ -497,7 +512,8 @@ export default function App() {
         guided: normalizeVariant(data.guided),
         standard: normalizeVariant(data.standard),
         challenge: normalizeVariant(data.challenge),
-        organization: typeof data.organization === 'string' ? data.organization : undefined
+        organization: typeof data.organization === 'string' ? data.organization : undefined,
+        organizationCalcWarnings: Array.isArray(data.organizationCalcWarnings) ? data.organizationCalcWarnings : undefined
       });
       setGenParams({ ...formData, docName });
       setActiveVariant('guided');
@@ -1009,6 +1025,7 @@ export default function App() {
                 <div className="mt-6 p-5 bg-paper rounded-xl border border-line">
                   <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inksoft mb-2">Organisation</h4>
                   <p className="text-sm text-inksoft leading-relaxed whitespace-pre-line">{result.organization}</p>
+                  <div className="mt-3"><CalcWarnings warnings={result.organizationCalcWarnings} /></div>
                 </div>
               )}
             </motion.div>
@@ -1108,6 +1125,8 @@ function VariantCard({ data, label, color, description, regenerating, disabled, 
       </div>
 
       <div className="p-5 flex-1 space-y-6">
+        <CalcWarnings warnings={data.calcWarnings} />
+
         <div>
           <h4 className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-inkfaint mb-2">Consigne apprenants</h4>
           <p className="text-sm text-ink leading-relaxed whitespace-pre-line">{data.instruction}</p>

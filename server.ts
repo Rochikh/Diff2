@@ -8,7 +8,7 @@ import { rateLimit } from "express-rate-limit";
 import {
   validateParams,
   buildPrompt,
-  callDeepSeek
+  generateChecked
 } from "./lib/_lib";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,7 +57,7 @@ app.post("/api/generate", generateLimiter, async (req, res) => {
       return res.status(500).json({ error: "DEEPSEEK_API_KEY is not configured on the server." });
     }
 
-    const result = await callDeepSeek(buildPrompt(validation.params), DEEPSEEK_API_KEY);
+    const result = await generateChecked(buildPrompt(validation.params), DEEPSEEK_API_KEY);
     if (result.ok === false) {
       return res.status(result.status).json({ error: result.error });
     }

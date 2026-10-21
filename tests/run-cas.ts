@@ -3,7 +3,7 @@
 // (consignes identiques, support absent) et la taille de l'export Markdown.
 // Usage : npx tsx tests/run-cas.ts [tests/cas.json]
 import { readFileSync } from 'fs';
-import { validateParams, buildPrompt, callDeepSeek, DIFF_TYPE_LABELS, FORMAT_LABELS } from '../lib/_lib';
+import { validateParams, buildPrompt, generateChecked, DIFF_TYPE_LABELS, FORMAT_LABELS } from '../lib/_lib';
 import { buildMarkdown, stepToMd } from '../src/markdown';
 
 const file = process.argv[2] || new URL('./cas-a1-2.json', import.meta.url).pathname;
@@ -14,11 +14,18 @@ const params = validation.params;
 const apiKey = process.env.DEEPSEEK_API_KEY;
 if (!apiKey) throw new Error('DEEPSEEK_API_KEY manquante.');
 
-const result = await callDeepSeek(buildPrompt(params), apiKey);
+const result = await generateChecked(buildPrompt(params), apiKey);
 if (result.ok === false) throw new Error(result.error);
 
 console.log(result.content);
 const data = JSON.parse(result.content);
+
+// Contrôle des calculs : erreurs de la première réponse, relance, erreurs restantes (signalées).
+const firstWrong = Object.values(result.firstPass).flat();
+console.error(`Calculs faux en première réponse : ${firstWrong.length}${firstWrong.map(w => `\n  ${w}`).join('')}`);
+console.error(`Relance de correction : ${result.retried ? 'oui' : 'non'}`);
+const flagged = ['guided', 'standard', 'challenge'].flatMap(k => data[k]?.calcWarnings ?? []).concat(data.organizationCalcWarnings ?? []);
+console.error(`Calculs faux signalés après relance : ${flagged.length}${flagged.map((w: string) => `\n  ${w}`).join('')}`);
 
 // Un mot = une suite sans espace contenant au moins une lettre ou un chiffre.
 const words = (t: string) => (t.match(/\S+/g) ?? []).filter(w => /[\p{L}\p{N}]/u.test(w)).length;
@@ -30,7 +37,7 @@ const check = (label: string, n: number, max: number) => {
   console.error(`  ${label} : ${n}/${max}${over ? '  DÉPASSE' : ''}`);
 };
 
-const extraKeys = Object.keys(data).filter(k => !['guided', 'standard', 'challenge', 'organization'].includes(k));
+const extraKeys = Object.keys(data).filter(k => !['guided', 'standard', 'challenge', 'organization', 'organizationCalcWarnings'].includes(k));
 if (extraKeys.length) console.error(`Clés inattendues : ${extraKeys.join(', ')}`);
 
 for (const key of ['guided', 'standard', 'challenge']) {
@@ -41,7 +48,8 @@ for (const key of ['guided', 'standard', 'challenge']) {
   check('titre', words(v.title), 6);
   check('consigne', words(v.instruction), 70);
   if (typeof v.handout === 'string' && v.handout.trim()) check('support', words(v.handout), 120);
-  else { console.error('  support : ABSENT  BLOQUANT'); blocking++; }
+  else if (key === 'guided') { console.error('  support : ABSENT  BLOQUANT'); blocking++; }
+  else console.error('  support : absent');
   check('nombre d\'étapes', steps.length, 4);
   steps.forEach((s, i) => check(`étape ${i + 1}`, words(stepToMd(s)), 30));
   check('notes formateur', words(v.supportLevel), 50);

@@ -1,5 +1,6 @@
 // Logique serveur utilisée par server.ts. Le prompt est construit ici, côté serveur :
 // le client n'envoie que des champs de formulaire validés, jamais un prompt libre.
+import { wrongCalcsIn } from './calc';
 
 export const DIFF_TYPE_LABELS: Record<string, string> = {
   autonomie: "Niveau d'autonomie",
@@ -84,8 +85,8 @@ const SELF_CHECK = `Avant de répondre, vérifie en silence chaque point ci-dess
 4. Durées justes : dans chaque version, la somme des "minutes" des étapes est égale à la durée indiquée.
 5. Une seule variable de différenciation : les versions diffèrent uniquement par le type de différenciation choisi ; chaque version diffère de la précédente par au moins un élément nommé de ce type ; en étayage ou en autonomie, la production attendue est la même dans les trois versions.
 6. Mise en commun réaliste : chaque phase devant la classe entière fixe un nombre de passages dont la durée totale tient dans l'étape ; aucune étape n'est consacrée uniquement à de l'organisation.
-7. Étayage cloisonné : aucune aide propre à une version n'est présentée devant la classe entière ; aucune consigne ne contient l'aide retirée à sa version ; chaque critère de réussite s'applique à tous les apprenants ; le support de la version la plus guidée couvre chaque élément exigé par les critères de réussite, y compris les conversions d'unités.
-8. Aide visible : chaque version a un "handout" rédigé en entier, ou indique qu'elle n'a aucun support ; en étayage ou en autonomie, deux versions n'ont jamais la même consigne mot pour mot, et l'aide de chaque version se lit dans sa consigne et son support ; une information qui facilite la tâche (nombre de réponses attendues, réponse partielle, méthode) n'apparaît que dans la version la plus guidée ; chaque calcul cité est juste.
+7. Étayage cloisonné : aucune aide propre à une version n'est présentée devant la classe entière ; aucune consigne ne contient l'aide retirée à sa version ; chaque critère de réussite s'applique à tous les apprenants ; le support de la version la plus guidée couvre chaque élément exigé par les critères de réussite.
+8. Aide visible : chaque version a un "handout" rédigé en entier, ou indique qu'elle n'a aucun support ; en étayage ou en autonomie, deux versions n'ont jamais la même consigne mot pour mot, et l'aide de chaque version se lit dans sa consigne et son support ; une information qui facilite la tâche (nombre de réponses attendues, réponse partielle, méthode) n'apparaît que dans la version la plus guidée ; chaque information factuelle citée est exacte (dates, noms, faits, résultats).
 9. Longueurs respectées : chaque champ tient dans sa limite de mots, aucune information n'est répétée d'un champ à l'autre.`;
 
 export function buildPrompt(p: GenerateParams): string {
@@ -107,10 +108,10 @@ Appuie-toi prioritairement sur le contenu de ce document pour concevoir les acti
 ${docSection}
 Règles pédagogiques :
 - Garde le même objectif pédagogique pour toutes les versions.
-- Respecte strictement l'objectif pédagogique : n'ajoute aucune étape ni phase préalable qui le contredit. Quand l'objectif mentionne des informations, connaissances ou productions déjà acquises (par exemple des données déjà recueillies ou une notion vue précédemment), considère qu'elles sont disponibles au début de l'activité et pars de ces informations.
+- Respecte strictement l'objectif pédagogique : n'ajoute aucune étape ni phase préalable qui le contredit. Quand l'objectif mentionne des informations, connaissances ou productions déjà acquises (par exemple des informations déjà recueillies ou une notion vue précédemment), considère qu'elles sont disponibles au début de l'activité et pars de ces informations.
 - Varie uniquement le niveau d'étayage, d'autonomie ou de complexité selon le type de différenciation choisi (${DIFF_TYPE_LABELS[p.diffType]}). Fais varier ce seul paramètre : n'ajoute aucune difficulté étrangère à la compétence visée (mémorisation, vitesse, quantité de travail, connaissance hors objectif).
-- Chaque version diffère de la précédente par au moins un élément nommé du type de différenciation choisi (en étayage par exemple : modèle ou exemple résolu, fiche guide, aide du formateur pendant la préparation). Nomme ces éléments dans les notes pour le formateur.
-- Un élément d'étayage propre à une version (modèle, exemple résolu, liste, fiche guide) n'est jamais présenté devant la classe entière : il est donné uniquement aux apprenants de cette version.
+- Chaque version diffère de la précédente par au moins un élément nommé du type de différenciation choisi (en étayage par exemple : modèle, fiche guide, aide du formateur pendant la préparation). Nomme ces éléments dans les notes pour le formateur.
+- Un élément d'étayage propre à une version (modèle, liste, fiche guide) n'est jamais présenté devant la classe entière : il est donné uniquement aux apprenants de cette version.
 - Le support de la version la plus guidée couvre chaque élément exigé par les critères de réussite : chaque élément attendu apparaît dans le modèle ou l'exemple fourni.
 - La consigne de chaque version est donnée uniquement aux apprenants de cette version.
 - Quand la différenciation porte sur l'étayage ou l'autonomie, l'aide de chaque version se voit dans sa consigne et dans son support, pas seulement dans les notes pour le formateur : deux versions n'ont jamais la même consigne mot pour mot.
@@ -127,8 +128,8 @@ Règles pédagogiques :
 
 Directives spécifiques pour le contenu :
 - Consigne (instruction) : texte destiné aux apprenants, que le formateur lit ou distribue tel quel. Adresse-toi directement à eux (vouvoiement ou tutoiement, de façon constante), en phrases complètes et courtes, avec un vocabulaire accessible au public décrit ; explique les termes techniques ou du métier si nécessaire. Uniquement si l'activité porte sur l'apprentissage d'une langue ou si le public est décrit par un niveau CECRL : adapte le vocabulaire et les temps à ce niveau, et pour un niveau A1 ou A2 utilise uniquement le présent, l'impératif et le futur proche.
-  Présente les données de la situation de façon lisible : quand il y en a plusieurs, une donnée par ligne (lignes séparées par \\n et commençant par "- ") ou un tableau simple (une ligne par rangée, colonnes séparées par " | ").
-- Support à distribuer (handout) : document remis aux apprenants de cette version, rédigé en entier et prêt à imprimer (exemple résolu, rappel, tableau, questions guides), jamais une simple description du type « une fiche avec un exemple ». Même mise en forme que la consigne pour les listes et tableaux. La version la plus autonome peut n'avoir aucun support : le champ contient alors exactement « Aucun support : la consigne suffit. ».
+  Présente les éléments de travail de façon lisible (informations, situations, extraits, documents à observer) : quand il y en a plusieurs, un élément par ligne (lignes séparées par \\n et commençant par "- ") ou un tableau simple (une ligne par rangée, colonnes séparées par " | ").
+- Support à distribuer (handout) : document remis aux apprenants de cette version, rédigé en entier et prêt à imprimer, de la forme qui convient à la discipline et à la tâche : texte modèle, banque de mots, amorces de phrases, questions guides, schéma légendé décrit en texte, exemple résolu, liste de vérification. Jamais une simple description du type « une fiche avec un exemple ». Même mise en forme que la consigne pour les listes et tableaux. La version la plus autonome peut n'avoir aucun support : le champ contient alors exactement « Aucun support : la consigne suffit. ».
 - Notes pour le formateur (supportLevel) : texte destiné au formateur seul : étayage à apporter dans cette version, points de vigilance, ce qu'il observe et comment il intervient.
 - Déroulement en étapes (steps) : Sois concret : une action précise par étape. Chaque étape porte sa durée en minutes (entier, champ "minutes"). La somme des minutes est exactement égale à la durée estimée. Chaque étape comporte une production des apprenants : les actions d'organisation (former les groupes, distribuer, choisir des volontaires) s'intègrent à une étape de travail, jamais à une étape à part. Si l'activité se fait en groupes, tiens compte de leur taille : quand les apprenants présentent ou restituent, précise si c'est devant leur sous-groupe ou devant la classe entière, et prévois assez de temps pour que chacun passe. L'effectif de la classe est inconnu : pour une phase devant la classe entière, fixe un nombre précis de passages (par exemple 2 ou 3) et une durée par passage, dont le total tient dans la durée de l'étape ; ne fais jamais passer « chaque groupe ».
 - Critères de réussite (successCriteria) : Utilise un langage clair, mesurable et actionnable. Exemple : "L'apprenant a formulé 2 arguments basés sur le texte" plutôt que "L'apprenant a compris le texte". Tout nombre cité correspond exactement au nombre d'éléments listés dans le déroulé ou le support de la même version. Chaque critère s'applique à tous les apprenants de la version (pas de critère qui porte sur un passage que seuls certains apprenants font).
@@ -170,8 +171,10 @@ ${SELF_CHECK}
 10. Organisation : le bloc "organization" explique le fonctionnement en parallèle et la répartition par critères observables, parle d'un objectif commun et jamais d'une consigne commune, tient dans la durée indiquée, aligne les phases en classe entière, précise la composition des sous-groupes s'il y en a et ne contredit aucune étape, en 80 mots maximum.`;
 }
 
+type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
 export async function callDeepSeek(
-  prompt: string,
+  prompt: string | ChatMessage[],
   apiKey: string
 ): Promise<{ ok: true; content: string } | { ok: false; status: number; error: string }> {
   const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -188,7 +191,7 @@ export async function callDeepSeek(
           content:
             "Tu es un assistant pédagogique expert. Tu réponds EXCLUSIVEMENT par un objet JSON valide, sans texte avant ni après, sans bloc markdown, sans commentaire. Si la consigne demande une structure précise, respecte-la à la lettre."
         },
-        { role: 'user', content: prompt }
+        ...(typeof prompt === 'string' ? [{ role: 'user', content: prompt }] : prompt)
       ],
       temperature: 0.4,
       response_format: { type: 'json_object' }
@@ -211,4 +214,68 @@ export async function callDeepSeek(
     return { ok: false, status: 500, error: 'No content returned from DeepSeek' };
   }
   return { ok: true, content };
+}
+
+// Calculs faux par bloc de la réponse : une variante seule ("variant") ou les trois et l'organisation.
+function wrongCalcsByBlock(data: any): Record<string, string[]> {
+  const blocks: Record<string, unknown> =
+    data && 'guided' in data
+      ? { guided: data.guided, standard: data.standard, challenge: data.challenge, organization: data.organization }
+      : { variant: data };
+  const out: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(blocks)) {
+    const wrong = wrongCalcsIn(value);
+    if (wrong.length) out[key] = wrong;
+  }
+  return out;
+}
+
+// Génère, contrôle les calculs écrits et, s'il y en a de faux, demande une seule correction.
+// Les erreurs qui persistent sont jointes à la réponse : "calcWarnings" sur la variante
+// concernée, "organizationCalcWarnings" pour le bloc commun.
+export async function generateChecked(
+  prompt: string,
+  apiKey: string
+): Promise<{ ok: true; content: string; firstPass: Record<string, string[]>; retried: boolean } | { ok: false; status: number; error: string }> {
+  const first = await callDeepSeek(prompt, apiKey);
+  if (first.ok === false) return first;
+
+  let content = first.content;
+  let data: any;
+  try {
+    data = JSON.parse(content);
+  } catch {
+    return { ok: true, content, firstPass: {}, retried: false };
+  }
+  const firstPass = wrongCalcsByBlock(data);
+  if (!Object.keys(firstPass).length) return { ok: true, content, firstPass, retried: false };
+
+  const list = Object.values(firstPass).flat().map(w => `- ${w}`).join('\n');
+  const retry = await callDeepSeek(
+    [
+      { role: 'user', content: prompt },
+      { role: 'assistant', content },
+      {
+        role: 'user',
+        content: `Ta réponse contient des calculs faux :\n${list}\nCorrige ces calculs et tout ce qui en dépend (résultats suivants, critères de réussite). Ne change rien d'autre. Renvoie le JSON complet corrigé, avec la même structure.`
+      }
+    ],
+    apiKey
+  );
+  if (retry.ok) {
+    try {
+      data = JSON.parse(retry.content);
+      content = retry.content;
+    } catch {
+      // Correction illisible : on garde la première réponse, ses erreurs seront signalées.
+    }
+  }
+
+  const remaining = wrongCalcsByBlock(data);
+  for (const [key, wrong] of Object.entries(remaining)) {
+    if (key === 'variant') data.calcWarnings = wrong;
+    else if (key === 'organization') data.organizationCalcWarnings = wrong;
+    else data[key].calcWarnings = wrong;
+  }
+  return { ok: true, content: JSON.stringify(data), firstPass, retried: true };
 }
